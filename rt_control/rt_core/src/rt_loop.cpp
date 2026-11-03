@@ -1,9 +1,10 @@
 // ===========================================================================
 // 파일 역할 : RtLoop 의 구현. rt_loop.hpp 를 먼저 읽고 오세요.
 //
-// 읽는 순서 : 1) 시간 도우미 함수 3개 (ns ↔ timespec, 지금 시각)
-//            2) 준비 단계 5개 (record_kernel_info ~ prefault_stack)
-//            3) run() — 루프 본체. 이 파일의 핵심은 run() 의 for 문 20줄이다.
+// 읽는 순서 : 1) 준비 단계 5개 (record_kernel_info ~ prefault_stack)
+//            2) run() — 루프 본체. 이 파일의 핵심은 run() 의 for 문 20줄이다.
+//            3) BusyWorkStep::step() — 측정기가 쓰는 "바쁘게 돌기"
+// (시간 도우미는 rt_clock.hpp 로 옮겼다)
 // ===========================================================================
 #include "rt_core/rt_loop.hpp"
 
@@ -11,38 +12,17 @@
 #include <sched.h>       // SCHED_FIFO, cpu_set_t
 #include <sys/mman.h>    // mlockall, munlockall
 #include <sys/utsname.h> // uname
-#include <time.h>        // clock_gettime, clock_nanosleep
+#include <time.h>        // clock_nanosleep
 
 #include <cerrno>
 #include <fstream>
 
+#include "rt_core/rt_clock.hpp"
+
 namespace rt_core {
 
 // ---------------------------------------------------------------------------
-// 1) 시간 도우미. 커널은 timespec(초 + 나노초) 를 쓰고, 계산은 나노초 정수가 편하다.
-// ---------------------------------------------------------------------------
-static const std::int64_t kNsPerSec = 1000000000;
-
-static std::int64_t timespec_to_ns(const timespec& t) {
-  return static_cast<std::int64_t>(t.tv_sec) * kNsPerSec + t.tv_nsec;
-}
-
-static timespec ns_to_timespec(std::int64_t ns) {
-  timespec t;
-  t.tv_sec = static_cast<time_t>(ns / kNsPerSec);
-  t.tv_nsec = static_cast<long>(ns % kNsPerSec);
-  return t;
-}
-
-// 지금 시각(나노초). CLOCK_MONOTONIC = 시스템 시계를 바꿔도 뒤로 가지 않는 "단조 시계"
-static std::int64_t now_ns() {
-  timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return timespec_to_ns(t);
-}
-
-// ---------------------------------------------------------------------------
-// 2) 준비 단계
+// 1) 준비 단계
 // ---------------------------------------------------------------------------
 
 // 0) 커널 이름(uname -r)과 PREEMPT_RT 여부(/sys/kernel/realtime == 1)를 기록한다.
@@ -86,7 +66,7 @@ void RtLoop::pin_cpu() {
 }
 
 // 3) 실시간 스케줄링. SCHED_FIFO = "더 급한 스레드가 없으면 CPU를 내놓지 않는다".
-//    root 또는 CAP_SYS_NICE 권한이 필요하다. 없으면 EPERM 으로 실패한다.
+//    root 또는 CAP_SYS_NICE 권한(또는 ulimit -r)이 필요하다. 없으면 EPERM 으로 실패한다.
 void RtLoop::set_realtime_priority() {
   if (cfg_.prio <= 0) {
     return;  // 일반 스케줄링으로 돌기로 함 (--no-rt)
@@ -115,27 +95,34 @@ void RtLoop::prefault_stack() {
 }
 
 // ---------------------------------------------------------------------------
-// 3) 루프 본체
+// 2) 루프 본체
 // ---------------------------------------------------------------------------
-std::uint64_t RtLoop::run(SpscRing<Sample, kRingSize>& ring, std::atomic<std::uint64_t>& drops) {
+std::uint64_t RtLoop::run(RtStep& step, SpscRing<Sample, kRingSize>& ring, std::atomic<std::uint64_t>& drops,
+                          std::atomic<bool>* stop) {
   record_kernel_info();
   lock_memory();
   pin_cpu();
   set_realtime_priority();
   prefault_stack();
 
-  // 몇 번 돌 것인가 = 시간 / 주기
-  const std::uint64_t total_iters =
-      static_cast<std::uint64_t>(cfg_.seconds * 1e9 / static_cast<double>(cfg_.period_ns));
-
-  // 매 주기 바쁘게 돌 시간 (마이크로초 → 나노초)
-  const std::int64_t work_target_ns = static_cast<std::int64_t>(cfg_.work_us) * 1000;
+  // 몇 번 돌 것인가 = 시간 / 주기.  seconds 가 0 이면 "stop 신호까지 계속" (사실상 무한)
+  std::uint64_t total_iters = 0;
+  if (cfg_.seconds > 0.0) {
+    total_iters = static_cast<std::uint64_t>(cfg_.seconds * 1e9 / static_cast<double>(cfg_.period_ns));
+  } else {
+    total_iters = UINT64_MAX;
+  }
 
   std::int64_t next_wake_ns = now_ns() + cfg_.period_ns;  // 첫 번째 목표 시각
   std::int64_t prev_wake_ns = 0;                          // 지난 번 실제로 깬 시각 (첫 주기에는 없음)
   std::uint64_t done = 0;
 
   for (std::uint64_t i = 0; i < total_iters; ++i) {
+    // (0) 멈추라는 신호가 있으면 멈춘다 (ROS 2 노드가 Ctrl+C 를 받았을 때)
+    if (stop != nullptr && stop->load(std::memory_order_acquire)) {
+      break;
+    }
+
     // (a) 목표 시각까지 잔다. "지금부터 1 ms" 가 아니라 "그 시각(절대 시각)에" 깨워 달라고 한다.
     //     그래야 늦게 깬 만큼이 다음 주기로 쌓이지 않는다 (드리프트 없음).
     //     EINTR = 신호 때문에 잠이 깨진 경우 → 같은 시각으로 다시 잔다.
@@ -155,12 +142,9 @@ std::uint64_t RtLoop::run(SpscRing<Sample, kRingSize>& ring, std::atomic<std::ui
     }
     prev_wake_ns = woke_ns;
 
-    // (c) 제어 계산 흉내: work_us 동안 바쁘게 돈다.
-    //     실제 제어 노드에서는 여기서 "관절 상태 읽기 → 명령 계산 → 명령 쓰기"를 한다.
+    // (c) 이번 주기의 일. 측정기는 바쁘게 돌기, 제어 노드는 명령 읽기 → 안전 검사 → 로봇에 쓰기.
     std::int64_t work_start_ns = now_ns();
-    while (now_ns() - work_start_ns < work_target_ns) {
-      // 아무것도 안 하고 시간만 보낸다 (busy-wait)
-    }
+    step.step(i, s.wake_lat_ns);
     s.work_ns = now_ns() - work_start_ns;
 
     // (d) 로깅 스레드로 넘긴다. 꽉 차면 기다리지 않고 "드롭"으로 센다.
@@ -175,6 +159,18 @@ std::uint64_t RtLoop::run(SpscRing<Sample, kRingSize>& ring, std::atomic<std::ui
 
   munlockall();  // 메모리 잠금 해제
   return done;
+}
+
+// ---------------------------------------------------------------------------
+// 3) 측정기용 "바쁘게 돌기". 실제 제어 계산이 들어갈 자리를 시간으로만 흉내 낸다.
+// ---------------------------------------------------------------------------
+void BusyWorkStep::step(std::uint64_t iter, std::int64_t wake_lat_ns) {
+  (void)iter;
+  (void)wake_lat_ns;
+  std::int64_t start_ns = now_ns();
+  while (now_ns() - start_ns < work_target_ns_) {
+    // 아무것도 안 하고 시간만 보낸다 (busy-wait)
+  }
 }
 
 }  // namespace rt_core

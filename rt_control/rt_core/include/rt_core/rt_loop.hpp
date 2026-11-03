@@ -7,6 +7,9 @@
 //            3) RtStatus — 환경에서 실제로 되었는지/실패했는지 기록
 //            4) RtLoop::run() 의 5단계 (구현은 rt_loop.cpp)
 //
+// 매 주기 "할 일"은 RtStep(rt_step.hpp) 으로 바꿔 끼운다.
+//   측정기는 BusyWorkStep, 제어 노드는 ControlStep.
+//
 // 이 코드는 ROS 2를 모른다 (순수 C++17 + 리눅스 POSIX).
 // ROS 2 노드는 이 루프를 감싸는 얇은 껍질일 뿐이다 → ROS 2 없는 곳에서도 빌드·시험된다.
 // ===========================================================================
@@ -15,6 +18,7 @@
 #include <cstdint>
 #include <string>
 
+#include "rt_core/rt_step.hpp"
 #include "rt_core/spsc_ring.hpp"
 
 namespace rt_core {
@@ -26,7 +30,7 @@ struct Sample {
   std::uint64_t iter;          // 몇 번째 주기인가 (0부터)
   std::int64_t wake_lat_ns;    // "깨어나기로 한 시각"보다 얼마나 늦게 깼나. 늘 0 이상 (wake-up latency)
   std::int64_t period_err_ns;  // (이번 깨어남 - 지난 깨어남) - 목표 주기. 흔들림(지터)의 원천
-  std::int64_t work_ns;        // "제어 계산" 흉내에 실제로 걸린 시간
+  std::int64_t work_ns;        // step() 이 실제로 걸린 시간
 };
 
 // ---------------------------------------------------------------------------
@@ -36,8 +40,8 @@ struct RtConfig {
   std::int64_t period_ns = 1000000;  // 주기. 1,000,000 ns = 1 ms = 1 kHz
   int prio = 80;                     // SCHED_FIFO 우선순위 1~99. 0 이면 일반 스케줄링으로 돈다
   int cpu = -1;                      // 고정할 CPU 번호. -1 이면 고정하지 않는다
-  double seconds = 10.0;             // 얼마나 오래 돌릴지
-  std::uint32_t work_us = 50;        // 매 주기 "제어 계산" 흉내로 바쁘게 도는 시간 (마이크로초)
+  double seconds = 10.0;             // 얼마나 오래 돌릴지. 0 이면 stop 신호가 올 때까지 계속
+  std::uint32_t work_us = 50;        // (측정기 전용) BusyWorkStep 이 바쁘게 도는 시간 (마이크로초)
 };
 
 // ---------------------------------------------------------------------------
@@ -65,10 +69,12 @@ class RtLoop {
  public:
   explicit RtLoop(const RtConfig& cfg) : cfg_(cfg) {}
 
-  // "지금 이 스레드"를 RT 스레드로 만들고 루프를 돈다.
+  // "지금 이 스레드"를 RT 스레드로 만들고 루프를 돈다. 매 주기 step.step() 을 부른다.
   // 매 주기의 측정값을 ring 에 넣고, 꽉 차서 못 넣으면 drops 를 1 올린다 (기다리지 않는다).
+  // stop 이 true 가 되면 다음 주기에 멈춘다 (nullptr 이면 seconds 만큼만 돈다).
   // 반환값: 실제로 돈 주기 수
-  std::uint64_t run(SpscRing<Sample, kRingSize>& ring, std::atomic<std::uint64_t>& drops);
+  std::uint64_t run(RtStep& step, SpscRing<Sample, kRingSize>& ring, std::atomic<std::uint64_t>& drops,
+                    std::atomic<bool>* stop = nullptr);
 
   const RtStatus& status() const { return status_; }
   const RtConfig& config() const { return cfg_; }

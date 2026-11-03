@@ -1,7 +1,7 @@
 # 코드 읽기 가이드 (분석용)
 
-오늘(D0) 저장소에는 **실행 파일 1개 + 테스트 1개 + 스크립트 2개**가 있습니다. 전부 합쳐 약 700줄.
-아래 순서로 읽으면 1시간 안쪽입니다. 다 읽은 뒤 **"면접 시작"** 이라고 하시면 제가 이 코드에 대해 질문합니다.
+D0 에는 측정기(1~8번), D1 에는 제어 단계·ROS 2 노드·DDS 측정(9~13번)이 들어왔습니다. 전부 합쳐 약 1,900줄.
+아래 순서로 읽으면 됩니다. 막히는 곳은 "파일명 + 줄 번호"로 물어보면 그 부분만 설명합니다.
 
 ## 1. 읽는 순서
 
@@ -15,6 +15,11 @@
 | 6 | `scripts/cyclictest_run.sh` / `scripts/make_table1.py` | 약 60 / 150 | 측정 → 표① 마크다운 | cyclictest 옵션의 뜻 · 히스토그램에서 p99.9를 구하는 방법 |
 | 7 | `.github/workflows/ci.yml` | 약 50 | push마다 자동 빌드·테스트 | 무료 러너에서 무엇을 검증하고(돌아간다) 무엇을 검증 못 하는가(지연 수치) |
 | 8 | `robots/so101.yaml` | 약 40 | 로봇 프로필 | 왜 관절 수를 설정에서 읽어 "시작할 때" 버퍼를 잡는가 |
+| 9 | `rt_control/rt_core/include/rt_core/rt_step.hpp` | 약 40 | 매 주기 "할 일"의 모양. 측정기는 BusyWorkStep, 노드는 ControlStep | 왜 루프와 "할 일"을 분리했나 (같은 루프로 측정과 제어) |
+| 10 | `rt_control/rt_core/include/rt_core/joint_types.hpp` · `backend.hpp` · `sim_lag_backend.cpp` | 약 40 / 30 / 50 | 고정 크기 관절 자료형 · 로봇 쪽 인터페이스 · 1차 지연 흉내 | 왜 std::vector 가 아니라 고정 배열인가 |
+| 11 | `rt_control/rt_core/src/control_step.cpp` | 약 110 | 제어 한 주기: 최신 명령 → 워치독 → 변화량 제한 → 로봇 쓰기/읽기 → 상태 벨트 | 명령을 "최신 것만" 쓰는 이유 · 워치독이 "멈춤"을 어떻게 구현하나 |
+| 12 | `rt_control/ros2_adapter/src/rt_control_node.cpp` | 약 230 | ROS 2 노드(얇은 껍질). 스레드 3개, 토픽 3개 | 이 파일에 제어 논리가 없는 이유 · 콜백 스레드와 RT 스레드가 어떻게 만나나 |
+| 13 | `dds_bench/rtt_bench.py` · `run_matrix.sh` · `scripts/make_table2.py` | 약 180 / 50 / 70 | DDS 왕복 지연·손실 측정 → 표② | 왜 한 방향이 아니라 왕복인가 · reliable 과 best_effort 의 차이 |
 
 ## 2. 모든 파일에 던지는 질문 3개
 

@@ -53,3 +53,21 @@
 ## 4. 로봇 프로필 (`robots/*.yaml`)
 
 제어 노드는 시작할 때 프로필을 한 번 읽어 관절 수 N만큼 **고정 크기** 버퍼를 잡는다. 루프 안에서는 N이 6(SO-101)이든 수십(ALLEX)이든 같은 코드가 돈다. 로봇을 바꾸는 일 = 설정 파일을 바꾸는 일.
+
+## 5. D1 까지 만든 부분: 제어 노드 (rt_control_node)
+
+```
+ ros2 topic pub /joint_command (50 Hz)
+        │
+        ▼
+ [ROS 2 실행기 스레드 : on_command]  ──cmd_ring(SPSC)──▶  [RT 스레드 1 kHz : RtLoop → ControlStep]
+        ▲                                                       │   1) 우편함 비우기 → 최신 명령
+        │                                                       │   2) 워치독 (50 ms 끊기면 멈춤)
+   publish_state 100 Hz  ◀──state_ring(SPSC)────────────────────┤   3) 변화량 제한 (0.05 rad/주기)
+   publish_status 1 Hz   ◀──timing_ring(SPSC)───────────────────┘   4) Backend 쓰기/읽기 (SimLag → 나중에 MuJoCo·실물)
+        │                                                           5) 상태 벨트에 올리기
+        ▼
+ /joint_states (위치·속도)   /rt_status (JSON: 지연 p50/p99/max, 드롭, 워치독, 카운터)
+```
+- 제어 논리는 전부 `rt_core/control_step.cpp` 에 있고 ROS 2 노드에는 없다 → 로봇·미들웨어를 바꿔도 제어 코드는 그대로.
+- 안전장치 두 개(워치독·변화량 제한)는 RT 스레드 안에서 매 주기 돈다. 상위(ROS 2)가 죽어도 로봇은 멈춘다.

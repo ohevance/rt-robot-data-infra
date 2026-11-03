@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "rt_core/rt_loop.hpp"
+#include "rt_core/rt_step.hpp"
 #include "rt_core/spsc_ring.hpp"
 
 using rt_core::kRingSize;
@@ -275,9 +276,10 @@ int main(int argc, char** argv) {
   // 1) 로깅(소비자) 스레드 시작 — 일반 우선순위
   std::thread logger(logger_thread_main, &running, &samples);
 
-  // 2) 이 스레드(main)가 RT 스레드가 되어 루프를 돈다
+  // 2) 이 스레드(main)가 RT 스레드가 되어 루프를 돈다. 매 주기 할 일 = work_us 동안 바쁘게 돌기
+  rt_core::BusyWorkStep busy(o.cfg.work_us);
   RtLoop loop(o.cfg);
-  std::uint64_t iterations = loop.run(g_ring, drops);
+  std::uint64_t iterations = loop.run(busy, g_ring, drops);
 
   // 3) 끝났다고 알리고 로깅 스레드가 남은 것을 비울 때까지 기다린다
   running.store(false, std::memory_order_release);

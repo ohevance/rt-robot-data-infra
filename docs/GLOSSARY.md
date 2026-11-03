@@ -84,3 +84,30 @@
 ## 워치독 (watchdog)
 - 명령이 **일정 시간 끊기면 스스로 안전 정지**하는 감시 타이머. "50 ms 동안 새 명령이 없으면 토크 오프".
 - 여기서: `robots/*.yaml`의 `watchdog_ms`, 3주차 제어 노드.
+
+## 노드 / 토픽 (ROS 2)
+- 노드 = 프로그램 하나. 토픽 = 노드끼리 메시지를 주고받는 우체통 이름(`/joint_command`, `/joint_states`).
+- 여기서: `rt_control_node` 하나가 구독 1개(명령), 발행 2개(상태·통계).
+
+## 파라미터 파일 (ROS 2)
+- 노드가 시작할 때 읽는 설정값 묶음(관절 이름, 주기, 우선순위…). `--params-file` 로 넘긴다.
+- 여기서: `robots/so101.yaml` 에서 자동 생성한 `config/so101.params.yaml`.
+
+## RMW (ROS Middleware)
+- ROS 2 와 DDS 사이의 어댑터. 어떤 DDS 를 쓸지 환경변수 `RMW_IMPLEMENTATION` 으로 고른다(Fast DDS / Cyclone DDS).
+- 여기서: 표②의 "구현체" 열.
+
+## RTT (Round-Trip Time, 왕복 시간)
+- 보내고 되돌아올 때까지의 시간. 두 기기의 시계가 달라도 같은 시계로 잴 수 있다. 한 방향 ≈ RTT/2.
+- 여기서: `dds_bench/rtt_bench.py`.
+
+## 우편함 (명령 링)
+- ROS 2 콜백 스레드가 명령을 넣고 RT 스레드가 매 주기 전부 비워 "가장 최신 것"만 쓰는 SPSC 링.
+- 여기서: `control_step.cpp` 의 `take_latest_command()`.
+
+## 변화량 제한 (step limit)
+- 한 주기에 목표가 움직일 수 있는 최대량(`max_step_rad`). 튀는 명령이 로봇을 치는 것을 막는 마지막 안전장치.
+- 여기서: `control_step.cpp` 의 `limit_step()`.
+
+## prlimit / RLIMIT_RTPRIO
+- 일반 사용자가 실시간 우선순위를 쓸 수 있는 한도. `sudo prlimit --pid $$ --rtprio=99 --memlock=unlimited` 로 그 터미널에만 올린다. 서버·Pi 에서는 `/etc/security/limits.conf` 에 영구 설정.
