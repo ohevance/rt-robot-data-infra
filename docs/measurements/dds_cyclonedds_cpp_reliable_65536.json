@@ -1,0 +1,18 @@
+{
+  "label": "cyclonedds_cpp_reliable_65536",
+  "rmw": "rmw_cyclonedds_cpp",
+  "reliability": "reliable",
+  "depth": 10,
+  "payload_bytes": 65536,
+  "rate_hz": 100.0,
+  "sent": 500,
+  "received": 500,
+  "loss_pct": 0.0,
+  "rtt_us": {
+    "min": 447.7,
+    "p50": 1236.2,
+    "p99": 3412.9,
+    "p999": 4549.5,
+    "max": 4549.5
+  }
+}

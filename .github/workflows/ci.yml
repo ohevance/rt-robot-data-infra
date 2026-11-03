@@ -41,6 +41,12 @@ jobs:
           python3 scripts/make_table1.py --jitter build/jitter_ci.json --out build/table1_ci.md
           cat build/table1_ci.md
 
+      - name: Fleet logic tests (no broker, no DB)
+        run: python3 fleet/tests/test_fleet_logic.py
+
+      - name: Dashboard JSON is valid
+        run: python3 fleet/grafana/make_dashboard.py && python3 -c "import json; json.load(open('fleet/grafana/provisioning/dashboards/fleet_overview.json'))"
+
       - uses: actions/upload-artifact@v4
         with:
           name: jitter-ci

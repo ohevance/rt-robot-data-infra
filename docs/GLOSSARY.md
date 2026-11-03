@@ -111,3 +111,30 @@
 
 ## prlimit / RLIMIT_RTPRIO
 - 일반 사용자가 실시간 우선순위를 쓸 수 있는 한도. `sudo prlimit --pid $$ --rtprio=99 --memlock=unlimited` 로 그 터미널에만 올린다. 서버·Pi 에서는 `/etc/security/limits.conf` 에 영구 설정.
+
+## 브로커 (MQTT broker, Mosquitto)
+- 장치들이 메시지를 보내는 우체국 건물. 장치는 서로를 몰라도 되고 브로커만 안다. 토픽 = 우체통 이름(`fleet/<id>/telemetry`).
+- 여기서: `fleet/docker-compose.yml` 의 `mqtt`.
+
+## 유언 (LWT, Last Will and Testament)
+- 장치가 접속할 때 "내가 소리 없이 죽으면 이 메시지를 대신 보내 달라"고 브로커에 맡겨 두는 것. 전원이 뽑혀도 서버는 `offline` 을 받는다.
+- 여기서: `device_agent.py` 의 `will_set`.
+
+## 보관 메시지 (retained)
+- 토픽의 "마지막 값"을 브로커가 기억해 뒀다가 새로 구독하는 쪽에 바로 준다. 장치 상태(online/offline)에 쓴다.
+
+## store-and-forward (모았다 보내기)
+- 연결이 끊기면 장치가 데이터를 쌓아 두고, 다시 붙으면 몰아서 보낸다. 유실을 "없애는" 게 아니라 "줄이고 세는" 장치.
+- 여기서: `device_agent.py` 의 `buffer`, `flush_buffer()`.
+
+## 하이퍼테이블 (hypertable, TimescaleDB)
+- 시간으로 자동 분할되는 큰 표. 보통 PostgreSQL 표처럼 쓰면서 시계열 질의(`time_bucket`)가 빠르다.
+- 여기서: `fleet/db/init.sql` 의 `telemetry`, `events`, `collector_stats`.
+
+## COPY (PostgreSQL)
+- 행을 하나씩 INSERT 하는 대신 묶음을 한 번에 밀어 넣는 명령. 수십 배 빠르다.
+- 여기서: `collector.py` 의 `write_db()`.
+
+## 수집 지연 (ingest latency)
+- 장치가 측정한 시각 → 서버가 DB 에 넣은 시각. 1초 묶음 때문에 최대 약 1초가 더해진다(설계상). 같은 시계(NTP)일 때만 의미.
+- 여기서: `telemetry.ingest_latency_ms`, `collector_stats.lat_p95_ms`.

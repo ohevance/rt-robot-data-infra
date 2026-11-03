@@ -1,0 +1,19 @@
+{
+  "label": "wsl_fifo",
+  "kernel": "6.18.33.2-microsoft-standard-WSL2",
+  "preempt_rt": false,
+  "sched_fifo": true,
+  "sched_errno": 0,
+  "mlockall": true,
+  "mlock_errno": 0,
+  "cpu_pin": -1,
+  "period_us": 1000,
+  "seconds": 5.000,
+  "work_us": 50,
+  "iterations": 5000,
+  "samples": 5000,
+  "drops": 0,
+  "wake_us": {"min": 5.213, "avg": 48.917, "p50": 37.456, "p99": 272.983, "p999": 663.965, "max": 936.941, "n": 5000},
+  "period_err_us": {"min": -924.706, "avg": -0.013, "p50": -0.782, "p99": 183.462, "p999": 552.460, "max": 905.419, "n": 4999},
+  "work_us_stats": {"min": 50.020, "avg": 50.464, "p50": 50.038, "p99": 65.066, "p999": 96.653, "max": 213.608, "n": 5000}
+}

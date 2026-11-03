@@ -1,6 +1,6 @@
 # 코드 읽기 가이드 (분석용)
 
-D0 에는 측정기(1~8번), D1 에는 제어 단계·ROS 2 노드·DDS 측정(9~13번)이 들어왔습니다. 전부 합쳐 약 1,900줄.
+D0 측정기(1~8번), D1 제어 단계·ROS 2 노드·DDS 측정(9~13번), D2 관제(14~16번). 전부 합쳐 약 2,800줄.
 아래 순서로 읽으면 됩니다. 막히는 곳은 "파일명 + 줄 번호"로 물어보면 그 부분만 설명합니다.
 
 ## 1. 읽는 순서
@@ -20,6 +20,9 @@ D0 에는 측정기(1~8번), D1 에는 제어 단계·ROS 2 노드·DDS 측정(9
 | 11 | `rt_control/rt_core/src/control_step.cpp` | 약 110 | 제어 한 주기: 최신 명령 → 워치독 → 변화량 제한 → 로봇 쓰기/읽기 → 상태 벨트 | 명령을 "최신 것만" 쓰는 이유 · 워치독이 "멈춤"을 어떻게 구현하나 |
 | 12 | `rt_control/ros2_adapter/src/rt_control_node.cpp` | 약 230 | ROS 2 노드(얇은 껍질). 스레드 3개, 토픽 3개 | 이 파일에 제어 논리가 없는 이유 · 콜백 스레드와 RT 스레드가 어떻게 만나나 |
 | 13 | `dds_bench/rtt_bench.py` · `run_matrix.sh` · `scripts/make_table2.py` | 약 180 / 50 / 70 | DDS 왕복 지연·손실 측정 → 표② | 왜 한 방향이 아니라 왕복인가 · reliable 과 best_effort 의 차이 |
+| 14 | `fleet/agent/device_agent.py` | 약 150 | 장치 한 대: 발행 · 끊기면 버퍼 · 재접속 시 재전송 · 유언 | 끊긴 동안 어디에 쌓이고 언제 비우나 · 왜 재전송은 QoS 1 인가 |
+| 15 | `fleet/collector/collector.py` · `fleet/db/init.sql` | 약 220 / 60 | 구독 → 1초 묶음 COPY 적재 → 통계 | 왜 묶음인가 · 수집 지연에 1초가 더해지는 이유 · 유실을 어떻게 세나(seq) |
+| 16 | `fleet/grafana/make_dashboard.py` · `fleet/docker-compose.yml` | 약 110 / 50 | 패널 11개의 SQL · 컨테이너 3개 | 각 패널이 어느 표의 어느 열을 보나 |
 
 ## 2. 모든 파일에 던지는 질문 3개
 

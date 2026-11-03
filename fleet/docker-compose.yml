@@ -1,0 +1,48 @@
+# ---------------------------------------------------------------------------
+# 관제 서버 한 벌 (3개 컨테이너). 공고 ②③ "실시간 로깅·모니터링·시각화" 의 몸통.
+#
+#   장치들 ──MQTT──▶ [mqtt: Mosquitto 브로커] ──▶ (collector.py 가 꺼내서) ──▶ [db: TimescaleDB] ──▶ [grafana: 상황판]
+#
+# 시작:  docker compose -f fleet/docker-compose.yml up -d
+# 중지:  docker compose -f fleet/docker-compose.yml down        (데이터 유지)
+# 초기화: docker compose -f fleet/docker-compose.yml down -v    (데이터까지 삭제)
+# ---------------------------------------------------------------------------
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: fleet_mqtt
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: fleet_db
+    environment:
+      POSTGRES_USER: fleet
+      POSTGRES_PASSWORD: fleet
+      POSTGRES_DB: fleet
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - fleet_db_data:/var/lib/postgresql/data
+
+  grafana:
+    image: grafana/grafana-oss:11.3.0
+    container_name: fleet_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - db
+
+volumes:
+  fleet_db_data: {}

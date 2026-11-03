@@ -38,7 +38,7 @@ for RMW in ${RMWS}; do
       RMW_IMPLEMENTATION="${RMW}" python3 dds_bench/rtt_bench.py --role ping --reliability "${REL}" --depth 10 \
         --payload "${PAY}" --rate "${RATE}" --count "${COUNT}" \
         --label "${LABEL}" --json "${OUTDIR}/dds_${LABEL}.json"
-      kill "${PONG_PID}" 2>/dev/null
+      kill -INT "${PONG_PID}" 2>/dev/null   # SIGINT: rclpy 가 KeyboardInterrupt 로 조용히 끝난다 (SIGTERM 은 예외 출력)
       wait "${PONG_PID}" 2>/dev/null
     done
   done

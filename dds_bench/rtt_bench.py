@@ -14,6 +14,9 @@
   python3 dds_bench/rtt_bench.py --role ping --reliability reliable --depth 10 --payload 1024 --rate 100 --count 500 \
           --label fast_reliable_1k --json docs/measurements/dds_fast_reliable_1k.json
 DDS 구현체는 환경변수로 고른다:  RMW_IMPLEMENTATION=rmw_fastrtps_cpp | rmw_cyclonedds_cpp
+
+주의: rclpy(Python) 기준이라 절대값에 수백 us 의 파이썬 오버헤드가 얹혀 있다.
+      구현체·QoS·크기 사이의 "상대 비교"에 쓰고, 절대 지연이 필요하면 C++ 측정기로 다시 잰다.
 """
 import argparse
 import json

@@ -11,13 +11,14 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(rmw REQUIRED)
 
 # ROS 2 와 무관한 핵심 라이브러리를 그대로 가져다 쓴다 (한 벌의 코드, 두 곳에서 빌드)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../rt_core ${CMAKE_CURRENT_BINARY_DIR}/rt_core)
 
 add_executable(rt_control_node src/rt_control_node.cpp)
 target_link_libraries(rt_control_node rt_core)
-ament_target_dependencies(rt_control_node rclcpp sensor_msgs std_msgs)
+ament_target_dependencies(rt_control_node rclcpp sensor_msgs std_msgs rmw)
 target_compile_options(rt_control_node PRIVATE -Wall -Wextra)
 
 install(TARGETS rt_control_node DESTINATION lib/${PROJECT_NAME})

@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
+#include "rmw/rmw.h"  // rmw_get_implementation_identifier: 어떤 DDS 가 실제로 쓰였나
 #include "rt_core/control_step.hpp"
 #include "rt_core/rt_clock.hpp"
 #include "rt_core/rt_loop.hpp"
@@ -186,14 +187,15 @@ class RtControlNode : public rclcpp::Node {
       watchdog = "ok";
     }
 
-    char buf[768];
+    char buf[896];
     std::snprintf(buf, sizeof(buf),
                   "{\"iter\": %llu, \"loop_hz\": %lld, \"samples_1s\": %zu, "
                   "\"wake_us\": {\"p50\": %.1f, \"p99\": %.1f, \"max\": %.1f}, "
                   "\"timing_drops\": %llu, \"state_drops\": %llu, "
                   "\"commands_received\": %llu, \"commands_applied\": %llu, \"cmd_ring_full\": %llu, \"bad_commands\": %llu, "
                   "\"watchdog\": \"%s\", \"watchdog_trips\": %llu, \"step_limited\": %llu, "
-                  "\"rt\": {\"sched_fifo\": %s, \"mlockall\": %s, \"kernel_realtime\": %s, \"kernel\": \"%s\"}}",
+                  "\"rt\": {\"sched_fifo\": %s, \"mlockall\": %s, \"kernel_realtime\": %s, \"kernel\": \"%s\"}, "
+                  "\"rmw\": \"%s\"}",
                   static_cast<unsigned long long>(last_state_.iter),
                   static_cast<long long>(1000000000LL / rt_cfg_.period_ns), wake_ns.size(), p50, p99, mx,
                   static_cast<unsigned long long>(timing_drops_.load()),
@@ -204,7 +206,8 @@ class RtControlNode : public rclcpp::Node {
                   watchdog, static_cast<unsigned long long>(counters_.watchdog_trips.load()),
                   static_cast<unsigned long long>(counters_.step_limited.load()),
                   st.rt_sched_ok ? "true" : "false", st.mlock_ok ? "true" : "false",
-                  st.kernel_realtime ? "true" : "false", st.kernel_release.c_str());
+                  st.kernel_realtime ? "true" : "false", st.kernel_release.c_str(),
+                  rmw_get_implementation_identifier());
 
     std_msgs::msg::String msg;
     msg.data = buf;

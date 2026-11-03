@@ -71,3 +71,14 @@
 ```
 - 제어 논리는 전부 `rt_core/control_step.cpp` 에 있고 ROS 2 노드에는 없다 → 로봇·미들웨어를 바꿔도 제어 코드는 그대로.
 - 안전장치 두 개(워치독·변화량 제한)는 RT 스레드 안에서 매 주기 돈다. 상위(ROS 2)가 죽어도 로봇은 멈춘다.
+
+## 6. D2 까지 만든 부분: 관제 (fleet)
+
+```
+ [가상 장치 x50]────┐
+ [rt-node-1 다리]───┼──MQTT 1 Hz──▶ [Mosquitto] ──▶ [collector.py] ──COPY 1초 묶음──▶ [TimescaleDB] ──▶ [Grafana]
+ [Pi (나중에)]──────┘      ▲                                   │                          telemetry / devices / events / collector_stats
+            끊기면 버퍼 ───┘ 재접속 시 QoS 1 재전송           └─ 매초: msgs/s, 적재 ms, 수집 지연 p50/p95/max, 온라인 수
+```
+- 장치는 브로커만 안다(서로 모른다). 서버는 장치 수와 무관하게 같은 코드. 300대도 `--count 300`.
+- 유실은 "없다"가 아니라 "센다": 장치는 seq 를, 서버는 seq 의 빈칸을 센다. 끊김은 장치 버퍼가 메운다.

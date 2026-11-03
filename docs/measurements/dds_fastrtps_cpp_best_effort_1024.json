@@ -1,0 +1,18 @@
+{
+  "label": "fastrtps_cpp_best_effort_1024",
+  "rmw": "rmw_fastrtps_cpp",
+  "reliability": "best_effort",
+  "depth": 10,
+  "payload_bytes": 1024,
+  "rate_hz": 100.0,
+  "sent": 500,
+  "received": 500,
+  "loss_pct": 0.0,
+  "rtt_us": {
+    "min": 370.5,
+    "p50": 990.7,
+    "p99": 2252.7,
+    "p999": 3087.0,
+    "max": 3087.0
+  }
+}

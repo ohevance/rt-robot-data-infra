@@ -22,6 +22,11 @@ sudo prlimit --pid $$ --rtprio=99 --memlock=unlimited
 source /opt/ros/jazzy/setup.bash && source ~/rt-robot-data-infra/install/setup.bash
 ros2 run rt_control_ros2 rt_control_node --ros-args --params-file ~/rt-robot-data-infra/rt_control/ros2_adapter/config/so101.params.yaml
 ```
+**종료는 그 터미널에서 Ctrl+C.** 스크립트로 띄우고 `kill` 할 때는 `ros2 run` 껍데기가 아니라 노드 자체를 죽여야 한다:
+```bash
+~/rt-robot-data-infra/install/rt_control_ros2/lib/rt_control_ros2/rt_control_node --ros-args --params-file ... &   # 바이너리 직접 실행 → kill $! 이 노드를 죽인다
+pkill -f rt_control_node    # 또는 이름으로
+```
 (권한 올리기를 생략하면 `rt_status` 의 `sched_fifo` 가 `false` 로 나온다. 동작은 하지만 일반 우선순위다.)
 
 ## 실행 — 터미널 2 (관찰)
