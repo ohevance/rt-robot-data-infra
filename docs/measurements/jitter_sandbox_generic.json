@@ -1,0 +1,19 @@
+{
+  "label": "sandbox_generic",
+  "kernel": "6.18.44-fc-v230",
+  "preempt_rt": false,
+  "sched_fifo": true,
+  "sched_errno": 0,
+  "mlockall": true,
+  "mlock_errno": 0,
+  "cpu_pin": -1,
+  "period_us": 1000,
+  "seconds": 3.000,
+  "work_us": 50,
+  "iterations": 3000,
+  "samples": 3000,
+  "drops": 0,
+  "wake_us": {"min": 21.970, "avg": 116.166, "p50": 84.986, "p99": 728.658, "p999": 2892.321, "max": 3828.817, "n": 3000},
+  "period_err_us": {"min": -915.752, "avg": -0.034, "p50": -0.740, "p99": 339.441, "p999": 2349.394, "max": 3748.682, "n": 2999},
+  "work_us_stats": {"min": 50.029, "avg": 57.542, "p50": 50.055, "p99": 133.959, "p999": 2000.907, "max": 3344.485, "n": 3000}
+}

@@ -1,0 +1,9 @@
+build/
+__pycache__/
+*.pyc
+.venv/
+*.csv
+!docs/measurements/*.csv
+third_party/
+*.swp
+.DS_Store
