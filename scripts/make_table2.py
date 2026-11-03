@@ -18,6 +18,11 @@ def fmt_bytes(n):
     return f"{n} B"
 
 
+def sort_key(r):
+    """정렬 순서: 구현체 → 신뢰성 → 크기"""
+    return (r.get("rmw", ""), r.get("reliability", ""), r.get("payload_bytes", 0))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", nargs="+", required=True, help="dds_*.json (glob 허용)")
@@ -34,7 +39,7 @@ def main():
         return 2
 
     # 보기 좋게 정렬: 구현체 → 신뢰성 → 크기
-    rows.sort(key=lambda r: (r.get("rmw", ""), r.get("reliability", ""), r.get("payload_bytes", 0)))
+    rows.sort(key=sort_key)
 
     lines = ["### 표② DDS 왕복 지연(RTT)·손실률 (단위 us, 같은 호스트 프로세스 간)", ""]
     lines.append("| 구현체 | 신뢰성 | 깊이 | 크기 | 속도 | 보냄 | 받음 | 손실% | min | p50 | p99 | p99.9 | max |")

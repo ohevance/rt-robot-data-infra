@@ -51,15 +51,21 @@ class StatusBridge(Node):
             "loop_hz": d.get("loop_hz"),
             "wake_p99_us": wake.get("p99"),
             "wake_max_us": wake.get("max"),
+            "work_p99_us": d.get("work_us", {}).get("p99"),
             "timing_drops": d.get("timing_drops"),
             "watchdog_trips": d.get("watchdog_trips"),
             "rmw": d.get("rmw"),
+            "backend": d.get("backend"),
             "sched_fifo": d.get("rt", {}).get("sched_fifo"),
         }
 
     def state(self):
+        """상태 머신 이름(READY/RUNNING/FAULT/RECOVERING)을 장치 상태로. 없으면 워치독 값."""
         with self.lock:
-            return self.latest.get("watchdog", "unknown")
+            name = self.latest.get("state")
+            if name is None:
+                name = self.latest.get("watchdog", "unknown")
+            return str(name).lower()
 
 
 def main():

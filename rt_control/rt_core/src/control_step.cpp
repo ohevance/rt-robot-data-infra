@@ -17,6 +17,9 @@ ControlStep::ControlStep(const ControlConfig& cfg, Backend& backend, CommandRing
     position_[j] = 0.0;
     velocity_[j] = 0.0;
   }
+  // 백엔드는 이 객체를 만들기 전에 init 되어 있다 → INIT 끝, READY 로
+  sm_.handle(RobotEvent::INIT_DONE);
+  counters_.robot_state.store(static_cast<std::uint8_t>(sm_.state()), std::memory_order_relaxed);
 }
 
 // ---------------------------------------------------------------------------
@@ -25,8 +28,9 @@ ControlStep::ControlStep(const ControlConfig& cfg, Backend& backend, CommandRing
 void ControlStep::step(std::uint64_t iter, std::int64_t wake_lat_ns) {
   std::int64_t now = now_ns();
 
+  got_command_this_cycle_ = false;
   take_latest_command(now);  // 1) 우편함 비우기 → desired_
-  check_watchdog(now);       // 2) 끊겼으면 desired_ = 현재 위치 (멈춤)
+  check_watchdog(now);       // 2) 끊겼으면 desired_ = 현재 위치 (멈춤) + 상태 머신 갱신
   limit_step();              // 3) applied_ 가 한 주기에 max_step_rad 이상 뛰지 않게
 
   // 4) 로봇에 쓰고 읽는다
@@ -40,6 +44,7 @@ void ControlStep::step(std::uint64_t iter, std::int64_t wake_lat_ns) {
   s.wake_lat_ns = wake_lat_ns;
   s.dof = cfg_.dof;
   s.watchdog_tripped = tripped_;
+  s.robot_state = static_cast<std::uint8_t>(sm_.state());
   for (std::uint32_t j = 0; j < cfg_.dof; ++j) {
     s.position[j] = position_[j];
     s.velocity[j] = velocity_[j];
@@ -69,6 +74,7 @@ void ControlStep::take_latest_command(std::int64_t now_ns) {
     desired_[j] = cmd.position[j];
   }
   last_cmd_ns_ = now_ns;
+  got_command_this_cycle_ = true;
   counters_.commands_applied.fetch_add(1, std::memory_order_relaxed);
 }
 
@@ -89,6 +95,30 @@ void ControlStep::check_watchdog(std::int64_t now_ns) {
     tripped_ = false;
   }
   counters_.watchdog_tripped.store(tripped_, std::memory_order_relaxed);
+  update_state_machine(got_command_this_cycle_, stale);
+}
+
+// 2-b) 사건을 상태 머신에 넣는다. 전이표는 robot_state_machine.cpp 에 있다.
+//   명령 도착 → COMMAND, 끊김 → WATCHDOG_TRIP, RECOVERING 에서 정상 주기가 recover_cycles 연속 → RECOVERED
+void ControlStep::update_state_machine(bool got_command, bool stale) {
+  if (stale) {
+    good_cycles_ = 0;
+    sm_.handle(RobotEvent::WATCHDOG_TRIP);
+  } else {
+    if (got_command) {
+      sm_.handle(RobotEvent::COMMAND);
+    }
+    if (sm_.state() == RobotState::RECOVERING) {
+      good_cycles_ = good_cycles_ + 1;
+      if (good_cycles_ >= cfg_.recover_cycles) {
+        good_cycles_ = 0;
+        sm_.handle(RobotEvent::RECOVERED);
+      }
+    }
+  }
+  counters_.robot_state.store(static_cast<std::uint8_t>(sm_.state()), std::memory_order_relaxed);
+  counters_.state_transitions.store(sm_.transitions(), std::memory_order_relaxed);
+  counters_.illegal_events.store(sm_.illegal_events(), std::memory_order_relaxed);
 }
 
 // 3) 변화량 제한. 상위가 갑자기 1 rad 를 요구해도 한 주기에는 max_step_rad 만큼만 움직인다.

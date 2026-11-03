@@ -1,4 +1,4 @@
-# 자동 생성: robots/so101.yaml 에서 (scripts/profile_to_params.py). 손으로 고치지 말 것.
+# 자동 생성: robots/so101.yaml 에서 (scripts/profile_to_params.py --backend sim_lag). 손으로 고치지 말 것.
 rt_control_node:
   ros__parameters:
     joint_names:
@@ -14,4 +14,13 @@ rt_control_node:
     watchdog_ms: 50
     max_step_rad: 0.05
     publish_hz: 100
+    backend: sim_lag
     sim_time_constant_s: 0.05
+    mujoco_model: third_party/mujoco_menagerie/trs_so_arm100/scene.xml
+    mujoco_joints:
+    - Rotation
+    - Pitch
+    - Elbow
+    - Wrist_Pitch
+    - Wrist_Roll
+    - Jaw

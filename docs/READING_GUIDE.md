@@ -1,6 +1,7 @@
 # 코드 읽기 가이드 (분석용)
 
-D0 측정기(1~8번), D1 제어 단계·ROS 2 노드·DDS 측정(9~13번), D2 관제(14~16번). 전부 합쳐 약 2,800줄.
+D0 측정기(1~8번), D1 제어 단계·ROS 2 노드·DDS 측정(9~13번), D2 관제(14~16번), D3 상태 머신·OTA(17~19번),
+D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24~25번). 전부 합쳐 약 5,000줄.
 아래 순서로 읽으면 됩니다. 막히는 곳은 "파일명 + 줄 번호"로 물어보면 그 부분만 설명합니다.
 
 ## 1. 읽는 순서
@@ -22,7 +23,16 @@ D0 측정기(1~8번), D1 제어 단계·ROS 2 노드·DDS 측정(9~13번), D2 �
 | 13 | `dds_bench/rtt_bench.py` · `run_matrix.sh` · `scripts/make_table2.py` | 약 180 / 50 / 70 | DDS 왕복 지연·손실 측정 → 표② | 왜 한 방향이 아니라 왕복인가 · reliable 과 best_effort 의 차이 |
 | 14 | `fleet/agent/device_agent.py` | 약 150 | 장치 한 대: 발행 · 끊기면 버퍼 · 재접속 시 재전송 · 유언 | 끊긴 동안 어디에 쌓이고 언제 비우나 · 왜 재전송은 QoS 1 인가 |
 | 15 | `fleet/collector/collector.py` · `fleet/db/init.sql` | 약 220 / 60 | 구독 → 1초 묶음 COPY 적재 → 통계 | 왜 묶음인가 · 수집 지연에 1초가 더해지는 이유 · 유실을 어떻게 세나(seq) |
-| 16 | `fleet/grafana/make_dashboard.py` · `fleet/docker-compose.yml` | 약 110 / 50 | 패널 11개의 SQL · 컨테이너 3개 | 각 패널이 어느 표의 어느 열을 보나 |
+| 16 | `fleet/grafana/make_dashboard.py` · `fleet/docker-compose.yml` | 약 130 / 70 | 패널 14개의 SQL · 컨테이너 3개(+수집기 선택) | 각 패널이 어느 표의 어느 열을 보나 |
+| 17 | `rt_control/rt_core/include/rt_core/robot_state_machine.hpp` · `src/robot_state_machine.cpp` | 약 60 / 90 | 로봇 상태 5개(INIT·READY·RUNNING·FAULT·RECOVERING)와 사건 5개, 허용 전이 **표** 하나 | "표에 없는 전이는 거절하고 센다"가 왜 if 문 더미보다 나은가 · `control_step.cpp` 의 `update_state_machine()` 이 언제 어떤 사건을 넣나 |
+| 18 | `fleet/agent/device_agent.py` 의 `on_message` · `apply_ota` | (+40) | 장치 쪽 OTA: ota 명령 → 별도 스레드에서 "적용"(updating → 새 버전) · bad 면 fault · ota_rollback 은 직전 버전 복원 | 왜 적용을 별도 스레드로 하나(텔레메트리가 계속 나가야 서버가 본다) · 겹치는 ota 를 거절하는 이유 |
+| 19 | `fleet/ota/rollout.py` | 약 260 | 서버 쪽 OTA: 장치 찾기 → 5%·50%·100% 단계 → 적용 대기 → 헬스 게이트 → 롤백(시간 측정) → events·ota_rollouts 기록 | 롤백을 "장치"가 아니라 "서버"가 결정하는 이유 · 헬스 게이트가 보는 것은 state 하나뿐인 이유(단순함) · 50대에서 나쁜 펌웨어가 닿는 장치는 왜 3대인가 |
+| 20 | `fleet/collector/collector.py` (D4 판) | 약 300 | Batch 단위 backlog: DB 쓰기 실패 → 묶음 보관 → 매초 재시도 → 상한 넘으면 오래된 것 버림. `--qos 1` 지속 세션 | 왜 디스크가 아니라 메모리 backlog 인가 · 상한 20만 행의 근거 · QoS 0 과 1 의 비용 차이 |
+| 21 | `fleet/chaos/inject.py` · `chaos/assert_results.py` | 약 330 / 90 | 장애 4종을 주입하고 감지·복구·유실을 DB 로 잰다. 판정 규칙 | 각 장애에서 "복구됨"의 정의가 무엇인가(첫 메시지/전 장치/backlog 0) · 유실을 seq 로 세는 식 · broker 장애에서 유실 ≤ 장치 수를 허용하는 이유 |
+| 22 | `fleet/tests/fake_mqtt.py` · `fake_psycopg.py` · `test_ota_rollout.py` · `test_collector_resilience.py` | 약 180 / 110 / 130 / 120 | 브로커·DB 없이 끝-대-끝을 돌리는 가짜들과 그 위의 테스트 | 가짜 브로커가 "동기 전달"인 것이 테스트를 어떻게 단순하게 하나 · 어디까지가 가짜고 어디부터가 진짜(integration.sh)인가 |
+| 23 | `.github/workflows/ci.yml` · `fleet/tests/integration.sh` · `fleet/db/migrate.py` | 약 110 / 60 / 60 | CI 3잡(rt_core → fleet_integration · mujoco) · 진짜 컨테이너 통합 테스트 · 번호 붙은 마이그레이션 | 1단계와 2단계가 각각 무엇을 증명하나 · init.sql 과 migrations 를 둘 다 두는 이유 |
+| 24 | `rt_control/rt_core/include/rt_core/mujoco_backend.hpp` · `src/mujoco_backend.cpp` | 약 90 / 230 | MuJoCo 를 Backend 로: 모델 로드 → 걸음 맞추기(ceil) → 관절 이름/액추에이터 연결 → 매 주기 ctrl 쓰고 mj_step, qpos/qvel 읽기 | init 에서만 할당하고 RT 에서는 안 하는 경계가 어디인가 · substeps 를 올림(ceil)으로 잡는 이유 · 관절 이름이 틀렸을 때 무엇을 출력하나 |
+| 25 | `rt_control/rt_core/test/test_mujoco_backend.cpp` · `scripts/get_mujoco.sh` · `rt_control_node.cpp` 의 `make_backend()` | 약 130 / 60 / 50 | 물리 모델 위 2000주기 테스트(움직임 + 한 주기 비용 p99) · 설치 · 파라미터로 백엔드 고르기 | 테스트가 p99 < 900 us 를 보는 이유(1 kHz 안에 물리가 들어오나) · 노드가 MuJoCo 없이 빌드됐을 때 어떻게 실패하나(조용히 바꾸지 않는다) |
 
 ## 2. 모든 파일에 던지는 질문 3개
 
@@ -43,6 +53,14 @@ sudo ./build/rt_core/jitter_bench --prio 80 --seconds 5 --label wsl_fifo    # SC
 python3 scripts/make_table1.py --jitter 'docs/measurements/jitter_*.json'  # 표① 형태로 보기
 ```
 WSL 수치는 **참고값**입니다(실시간 커널 아님). 보면서 생각할 것: "이 숫자가 왜 1 ms 주기보다 큰가?"
+
+## 3-1. 직접 돌려볼 것 (D3~D5, 브로커·DB 없이 1분)
+```bash
+./build/rt_core/test_state_machine                 # "OK: state_machine"  — 허용 전이·거절 전이·STOP
+python3 fleet/tests/test_ota_rollout.py            # 가짜 브로커 위 가상 20대: 정상 배포 / 나쁜 펌웨어 롤백(1대에서 멈춤) / 시간 초과
+python3 fleet/tests/test_collector_resilience.py   # DB 죽음 → backlog → 복귀, 상한, 지속 세션
+```
+진짜 컨테이너로 전체: `bash fleet/tests/integration.sh` (fleet/README.md 10번). MuJoCo: `backends/mujoco/README.md`.
 
 ## 4. 코드 작성 규칙 (이 저장소 전체)
 

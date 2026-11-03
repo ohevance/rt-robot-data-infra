@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "rt_core/control_step.hpp"
+#include "rt_core/robot_state_machine.hpp"
 #include "rt_core/sim_lag_backend.hpp"
 
 static int g_fail_count = 0;
@@ -64,12 +65,14 @@ int main() {
   ctl.step(0, 0);
   rt_core::JointStateSample s0 = drain_last();
   check(s0.watchdog_tripped == true, "no command yet -> tripped (hold)");
+  check(s0.robot_state == static_cast<std::uint8_t>(rt_core::RobotState::READY), "no command yet -> state READY (waiting)");
 
   // 1)+2) 목표 1.0 rad 로 명령 → 첫 주기 적용 목표는 0.05 이하, 위치는 0 보다 커진다
   send_command(cfg.dof, 1.0);
   ctl.step(1, 0);
   rt_core::JointStateSample s1 = drain_last();
   check(s1.watchdog_tripped == false, "command arrived -> not tripped");
+  check(s1.robot_state == static_cast<std::uint8_t>(rt_core::RobotState::RUNNING), "command arrived -> RUNNING");
   check(std::fabs(s1.target[0] - 0.05) < 1e-9, "first applied target is limited to max_step_rad");
   check(s1.position[0] > 0.0, "position starts moving toward target");
   check(counters.step_limited.load() >= 1, "step limit counter counted");
@@ -91,12 +94,24 @@ int main() {
   check(s3.watchdog_tripped == true, "no command for 30 ms -> tripped");
   check(counters.watchdog_trips.load() == 1, "trip counted once");
   check(std::fabs(s3.target[0] - s3.position[0]) < 0.06, "tripped -> target moves to current position (hold)");
+  check(s3.robot_state == static_cast<std::uint8_t>(rt_core::RobotState::FAULT), "tripped -> FAULT");
 
   // 명령이 다시 오면 풀린다
   send_command(cfg.dof, 0.5);
   ctl.step(303, 0);
   rt_core::JointStateSample s4 = drain_last();
   check(s4.watchdog_tripped == false, "command resumes -> untripped");
+  check(s4.robot_state == static_cast<std::uint8_t>(rt_core::RobotState::RECOVERING), "command resumes -> RECOVERING (not RUNNING yet)");
+
+  // 복구 확인: 명령을 계속 주며 150 주기 → 100 주기 뒤 READY, 그 다음 명령에서 RUNNING
+  for (int i = 304; i < 454; ++i) {
+    send_command(cfg.dof, 0.5);
+    ctl.step(static_cast<std::uint64_t>(i), 0);
+  }
+  rt_core::JointStateSample s5 = drain_last();
+  check(s5.robot_state == static_cast<std::uint8_t>(rt_core::RobotState::RUNNING), "after recover_cycles good cycles -> READY -> RUNNING");
+  check(counters.illegal_events.load() == 0, "no illegal state events in the normal path");
+  check(counters.state_transitions.load() >= 5, "transitions counted (INIT>READY>RUNNING>FAULT>RECOVERING>READY>RUNNING)");
 
   // 4) 벨트 드롭은 없어야 한다 (매번 비웠으므로)
   check(counters.state_drops.load() == 0, "no state drops");

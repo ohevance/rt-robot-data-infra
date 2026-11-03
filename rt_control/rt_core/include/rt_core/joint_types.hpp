@@ -28,6 +28,7 @@ struct JointStateSample {
   std::int64_t wake_lat_ns = 0;          // 이번 주기 깨어남 지연 (RtLoop 이 잰 값)
   std::uint32_t dof = 0;
   bool watchdog_tripped = false;         // 명령 끊김으로 "멈춤" 상태인가
+  std::uint8_t robot_state = 0;          // RobotState 값 (0 INIT, 1 READY, 2 RUNNING, 3 FAULT, 4 RECOVERING)
   double position[kMaxJoints] = {0.0};   // 실제 위치 (rad)
   double velocity[kMaxJoints] = {0.0};   // 실제 속도 (rad/s)
   double target[kMaxJoints] = {0.0};     // 이번 주기에 로봇에 실제로 보낸 목표 (제한 적용 후)

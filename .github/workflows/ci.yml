@@ -1,13 +1,18 @@
 # ---------------------------------------------------------------------------
-# CI (GitHub Actions)
-#   push 할 때마다 GitHub의 무료 리눅스 컴퓨터가 자동으로:
-#     1) rt_core를 빌드하고
-#     2) 링 버퍼 단위 테스트를 돌리고
-#     3) jitter_bench를 1 kHz로 2초 돌려 "로깅이 RT 루프를 못 따라가 드롭이 생기면 실패"
-#     4) 표① 생성기가 결과를 표로 만드는지 확인한다
-#   통과하면 README의 배지가 초록색이 된다.
-#   (무료 러너에는 RT 커널·RT 권한이 없으므로 여기 수치는 "돌아간다"의 증거이지
-#    지연 수치의 증거가 아니다. 지연 수치는 노트북 실측으로 docs/measurements 에 둔다.)
+# CI (GitHub Actions) — push 할 때마다 GitHub 의 무료 리눅스 컴퓨터가 자동으로 세 가지 잡(job)을 돈다.
+#
+#   1) rt_core (1단계, ~2분)
+#      rt_core 빌드 → 단위 테스트 4개(링 버퍼·제어 단계·상태 머신·MuJoCo 제외) → jitter_bench 1 kHz 2초 "드롭 0" 스모크
+#      → 표① 생성 → fleet 단위 테스트 3개(가짜 브로커·가짜 DB) → 대시보드 JSON 검사
+#   2) fleet_integration (2단계, ~5분)
+#      진짜 Mosquitto·TimescaleDB 컨테이너 위에서 수집기 + 가상 장치 10대 → 장애 주입 3종 + 나쁜 펌웨어 롤백 + 정상 OTA
+#      → "유실 0 · 복구됨 · 롤백됨" 판정 (fleet/tests/integration.sh 와 같은 스크립트)
+#   3) mujoco (2단계, ~3분)
+#      MuJoCo 3.x 를 내려받아 rt_core 를 -DRT_CORE_WITH_MUJOCO=ON 으로 빌드, SO-ARM100(menagerie) 모델로 백엔드 테스트 (화면 없음)
+#
+#   통과하면 README 의 배지가 초록색이 된다.
+#   (무료 러너에는 RT 커널·RT 권한이 없으므로 여기 수치는 "돌아간다"의 증거이지 지연 수치의 증거가 아니다.
+#    지연 수치는 노트북/Pi 실측으로 docs/measurements 에 둔다.)
 # ---------------------------------------------------------------------------
 name: ci
 
@@ -15,6 +20,9 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+
+env:
+  MUJOCO_VERSION: "3.3.2"     # scripts/get_mujoco.sh 와 같은 값. 바꾸면 둘 다 바꾼다
 
 jobs:
   rt_core:
@@ -30,7 +38,7 @@ jobs:
           cmake -S rt_control/rt_core -B build/rt_core -DCMAKE_BUILD_TYPE=Release
           cmake --build build/rt_core -j
 
-      - name: Unit test (spsc ring) + smoke (1 kHz, 2 s, zero drops)
+      - name: Unit tests (ring, control step, state machine) + smoke (1 kHz, 2 s, zero drops)
         run: ctest --test-dir build/rt_core --output-on-failure
 
       - name: Jitter smoke with JSON
@@ -41,8 +49,11 @@ jobs:
           python3 scripts/make_table1.py --jitter build/jitter_ci.json --out build/table1_ci.md
           cat build/table1_ci.md
 
-      - name: Fleet logic tests (no broker, no DB)
-        run: python3 fleet/tests/test_fleet_logic.py
+      - name: Fleet unit tests (fake broker, fake DB — no containers)
+        run: |
+          python3 fleet/tests/test_fleet_logic.py
+          python3 fleet/tests/test_ota_rollout.py
+          python3 fleet/tests/test_collector_resilience.py
 
       - name: Dashboard JSON is valid
         run: python3 fleet/grafana/make_dashboard.py && python3 -c "import json; json.load(open('fleet/grafana/provisioning/dashboards/fleet_overview.json'))"
@@ -53,3 +64,53 @@ jobs:
           path: |
             build/jitter_ci.json
             build/table1_ci.md
+
+  fleet_integration:
+    runs-on: ubuntu-24.04
+    needs: rt_core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python deps
+        run: pip install -r fleet/requirements.txt
+
+      - name: Broker + DB + collector + 10 virtual devices → faults → asserts
+        run: KEEP=0 bash fleet/tests/integration.sh
+        timeout-minutes: 15
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fleet-integration
+          path: build/integration/
+
+  mujoco:
+    runs-on: ubuntu-24.04
+    needs: rt_core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ git
+
+      - name: Download MuJoCo ${{ env.MUJOCO_VERSION }} + SO-ARM100 model (menagerie)
+        run: bash scripts/get_mujoco.sh "$MUJOCO_VERSION"
+
+      - name: Build with MuJoCo backend
+        run: |
+          cmake -S rt_control/rt_core -B build/rt_core_mj -DCMAKE_BUILD_TYPE=Release \
+                -DRT_CORE_WITH_MUJOCO=ON -DMUJOCO_DIR=$PWD/third_party/mujoco
+          cmake --build build/rt_core_mj -j
+
+      - name: MuJoCo backend test (headless, 1 kHz x 2000 cycles)
+        env:
+          RT_MUJOCO_MODEL: ${{ github.workspace }}/third_party/mujoco_menagerie/trs_so_arm100/so_arm100.xml
+          LD_LIBRARY_PATH: ${{ github.workspace }}/third_party/mujoco/lib
+        run: ctest --test-dir build/rt_core_mj --output-on-failure -R mujoco
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mujoco-ci
+          path: build/rt_core_mj/mujoco_backend_ci.json
+          if-no-files-found: ignore

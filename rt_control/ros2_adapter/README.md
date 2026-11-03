@@ -1,11 +1,12 @@
 # ros2_adapter — rt_core 를 감싸는 얇은 ROS 2 노드 (패키지 이름 `rt_control_ros2`)
 
 ```
- ros2 topic pub /joint_command ──▶ [ROS 2 실행기 스레드] ──cmd_ring──▶ [RT 스레드 1 kHz: ControlStep → SimLag 백엔드]
+ ros2 topic pub /joint_command ──▶ [ROS 2 실행기 스레드] ──cmd_ring──▶ [RT 스레드 1 kHz: ControlStep → 백엔드(SimLag | MuJoCo)]
                                         ▲                                      │
                       /joint_states ◀───┘ (100 Hz)        ◀──state_ring────────┘
-                      /rt_status    ◀───┘ (1 Hz, JSON: 지연 p50/p99/max, 드롭, 워치독)
+                      /rt_status    ◀───┘ (1 Hz, JSON: 지연 p50/p99/max, 드롭, 워치독, 상태 머신, backend, rmw)
 ```
+백엔드는 파라미터 `backend` 로 고른다: `sim_lag`(1차 지연 모델, 기본) / `mujoco`(물리 시뮬레이터, 빌드 옵션 필요 → `backends/mujoco/README.md`).
 
 ## 빌드 (WSL, 한 번)
 ```bash
@@ -48,11 +49,24 @@ ros2 topic pub -r 50 /joint_command sensor_msgs/msg/JointState "{position: [0.3,
 | 어디서 | 무엇 | 뜻 |
 |---|---|---|
 | `/rt_status` `wake_us` | p50 / p99 / max | ROS 2 노드 안에서도 RT 루프의 깨어남 지연이 측정기와 같은 수준인가 |
+| `/rt_status` `work_us` | p50 / p99 / max | 한 주기의 실제 작업 시간(제어 단계 + 백엔드). MuJoCo 면 물리 한 걸음이 포함 — 1000 us 안에 들어와야 한다 |
 | `/rt_status` `timing_drops`, `state_drops` | 0 이어야 함 | 발행 스레드가 RT 를 따라가고 있는가 |
 | `/rt_status` `watchdog`, `watchdog_trips` | 명령 끊으면 tripped, 다시 주면 ok | 안전 정지 동작 |
 | `/rt_status` `step_limited` | 큰 목표를 처음 줄 때 증가 | 급변 명령 차단 동작 |
+| `/rt_status` `state`, `state_transitions`, `illegal_events` | READY → RUNNING → FAULT → RECOVERING → READY, illegal 0 | 상태 머신(표 기반)이 정해진 길로만 움직이는가 |
+| `/rt_status` `backend`, `rmw` | sim_lag/mujoco, rmw_cyclonedds_cpp/rmw_fastrtps_cpp | 지금 무엇 위에서 돌고 있나 (가정하지 말고 찍는다) |
 | `ros2 topic hz /joint_states` | 100 Hz | 발행 주기 |
 
 ## 파라미터 파일
-`config/so101.params.yaml` 은 `robots/so101.yaml` 에서 `scripts/profile_to_params.py` 로 만든다. 손으로 고치지 않는다.
+`config/so101.params.yaml`(sim_lag) 과 `config/so101_mujoco.params.yaml`(mujoco) 은 `robots/so101.yaml` 에서
+`scripts/profile_to_params.py --backend sim_lag|mujoco` 로 만든다. 손으로 고치지 않는다.
 다른 로봇 = 다른 프로필 파일 → 같은 노드, 같은 명령.
+
+## MuJoCo 로 돌리기 (D5)
+```bash
+bash scripts/get_mujoco.sh
+colcon build --packages-select rt_control_ros2 --cmake-args -DCMAKE_BUILD_TYPE=Release -DRT_CORE_WITH_MUJOCO=ON -DMUJOCO_DIR=$PWD/third_party/mujoco
+source install/setup.bash
+./install/rt_control_ros2/lib/rt_control_ros2/rt_control_node --ros-args --params-file rt_control/ros2_adapter/config/so101_mujoco.params.yaml
+```
+(저장소 루트에서 실행 — 모델 경로가 상대 경로다. 자세한 것은 `backends/mujoco/README.md`)

@@ -5,9 +5,12 @@
   1) 텔레메트리 JSON 을 fleet/<id>/telemetry 로 발행 (일련번호 seq 포함 → 빠진 번호 = 유실)
   2) 브로커와 끊기면 메시지를 메모리에 모아 두었다가(store-and-forward) 다시 붙으면 QoS 1 로 재전송
   3) 접속 시 fleet/<id>/status 에 "online"(보관 메시지), 끊길 때 브로커가 대신 "offline" 을 남김 (LWT, 유언)
-  4) fleet/<id>/cmd 로 오는 명령을 받음 (오늘은 ping 만. D4 에 OTA 명령이 추가된다)
+  4) fleet/<id>/cmd 로 오는 명령을 받음: ping · set_state · health · ota · ota_rollback
+     - ota : 새 펌웨어 "적용"을 흉내 낸다 (apply_s 동안 state=updating → fw_version 교체).
+             bad=true 면 적용 뒤 state=fault (나쁜 펌웨어 시뮬레이션) → 서버가 롤백을 결정한다
+     - ota_rollback : 이전 버전으로 되돌리고 state=ok
 
-읽는 순서: DeviceAgent.__init__ → start → tick (한 주기) → on_connect (재접속 시 버퍼 비우기)
+읽는 순서: DeviceAgent.__init__ → start → tick (한 주기) → on_connect (재접속 시 버퍼 비우기) → on_message (명령) → apply_ota
 
 실물 장치(Pi, RT 노드)도 같은 클래스를 쓴다. 다른 것은 metrics_source(어디서 숫자를 가져오나)뿐이다.
 """
@@ -22,11 +25,16 @@ MAX_BUFFER = 3600  # 끊겼을 때 모아 두는 최대 개수 (1 Hz 기준 1시
 
 
 class DeviceAgent:
-    def __init__(self, device_id, broker_host, broker_port, period_s, metrics_source, fw_version="1.0.0"):
+    def __init__(self, device_id, broker_host, broker_port, period_s, metrics_source, fw_version="1.0.0",
+                 keepalive_s=10, telemetry_qos=0):
         self.device_id = device_id
         self.period_s = period_s
+        self.keepalive_s = keepalive_s        # 이 시간 동안 아무것도 못 받으면 PINGREQ 를 보낸다 (브로커는 1.5배 안에 못 들으면 끊고 유언 발행)
+        self.telemetry_qos = telemetry_qos    # 0: 보내고 잊음(기본, 가장 가벼움) / 1: 브로커가 받았다는 확인까지 (수집기 끊김 때 유실 0 에 필요)
         self.metrics_source = metrics_source  # 호출하면 dict 를 돌려주는 함수 (가상: 난수, 실물: 센서)
         self.fw_version = fw_version
+        self.prev_fw_version = None   # 롤백용: 직전 버전
+        self.ota_thread = None
         self.seq = 0
         self.buffer = deque()          # 끊겼을 때 쌓아 두는 (topic, payload)
         self.buffered_total = 0        # 지금까지 버퍼에 들어간 수
@@ -56,7 +64,7 @@ class DeviceAgent:
     # ---------- 시작 / 종료 ----------
     def start(self):
         self.running = True
-        self.client.connect_async(self.broker_host, self.broker_port, keepalive=10)
+        self.client.connect_async(self.broker_host, self.broker_port, keepalive=self.keepalive_s)
         self.client.loop_start()  # paho 가 네트워크 처리용 스레드를 하나 만든다
         self.thread = threading.Thread(target=self.run_loop, name=f"tick-{self.device_id}", daemon=True)
         self.thread.start()
@@ -99,7 +107,7 @@ class DeviceAgent:
 
     def send_or_buffer(self, topic, payload):
         if self.client.is_connected():
-            self.client.publish(topic, payload, qos=0)
+            self.client.publish(topic, payload, qos=self.telemetry_qos)
             return
         with self.lock:
             if len(self.buffer) >= MAX_BUFFER:
@@ -141,4 +149,38 @@ class DeviceAgent:
         elif name == "set_state":
             self.state = str(cmd.get("state", "ok"))
             reply["ok"] = True
+        elif name == "health":
+            reply["ok"] = (self.state == "ok")
+            reply["fw_version"] = self.fw_version
+            reply["state"] = self.state
+        elif name == "ota":
+            version = str(cmd.get("version", ""))
+            apply_s = float(cmd.get("apply_s", 2.0))
+            bad = bool(cmd.get("bad", False))
+            if version and self.ota_thread is None:
+                # 적용은 시간이 걸리므로 별도 스레드에서. 그동안 텔레메트리는 state=updating 으로 계속 나간다
+                self.ota_thread = threading.Thread(target=self.apply_ota, args=(version, apply_s, bad), daemon=True)
+                self.ota_thread.start()
+                reply["ok"] = True
+                reply["applying"] = version
+        elif name == "ota_rollback":
+            if self.prev_fw_version is not None:
+                self.fw_version = self.prev_fw_version
+                self.prev_fw_version = None
+                self.state = "ok"
+                reply["ok"] = True
+                reply["fw_version"] = self.fw_version
         client.publish(self.topic_cmd_reply, json.dumps(reply), qos=1)
+
+    # ---------- OTA 적용 흉내 (별도 스레드) ----------
+    def apply_ota(self, version, apply_s, bad):
+        """apply_s 동안 'updating' → 버전 교체 → 정상이면 ok, 나쁜 펌웨어면 fault"""
+        self.state = "updating"
+        time.sleep(apply_s)
+        self.prev_fw_version = self.fw_version
+        self.fw_version = version
+        if bad:
+            self.state = "fault"   # 새 펌웨어가 켜지자마자 고장 — 서버의 헬스 게이트가 이것을 잡아야 한다
+        else:
+            self.state = "ok"
+        self.ota_thread = None

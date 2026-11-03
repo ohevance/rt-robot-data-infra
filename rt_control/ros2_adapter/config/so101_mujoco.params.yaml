@@ -1,0 +1,26 @@
+# 자동 생성: robots/so101.yaml 에서 (scripts/profile_to_params.py --backend mujoco). 손으로 고치지 말 것.
+rt_control_node:
+  ros__parameters:
+    joint_names:
+    - shoulder_pan
+    - shoulder_lift
+    - elbow_flex
+    - wrist_flex
+    - wrist_roll
+    - gripper
+    loop_hz: 1000
+    prio: 80
+    cpu: -1
+    watchdog_ms: 50
+    max_step_rad: 0.05
+    publish_hz: 100
+    backend: mujoco
+    sim_time_constant_s: 0.05
+    mujoco_model: third_party/mujoco_menagerie/trs_so_arm100/scene.xml
+    mujoco_joints:
+    - Rotation
+    - Pitch
+    - Elbow
+    - Wrist_Pitch
+    - Wrist_Roll
+    - Jaw

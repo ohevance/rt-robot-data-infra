@@ -63,15 +63,30 @@
 
 ## OTA (Over-The-Air update)
 - 원격 소프트웨어 업데이트. **단계 배포**(5% → 50% → 100%)와 **롤백**(문제 생기면 원복)이 핵심.
-- 여기서: `fleet/ota`.
+- 여기서: `fleet/ota/rollout.py`(서버: 보내고·기다리고·판정·롤백), `fleet/agent/device_agent.py`(장치: 적용 흉내·롤백).
+- 한 문장: "50대에 나쁜 펌웨어를 올려도 3대에서 멈추고 1~2초 안에 돌아온다 — 숫자로 보여 드릴 수 있습니다."
+
+## 단계 배포 / 카나리 (staged rollout / canary)
+- 전체에 한 번에 올리지 않고 **소수(5%)에 먼저** 올려 지켜본 뒤 넓혀 가는 방식. 그 소수를 광산의 카나리아 새에 비유해 **카나리**라 부른다.
+- 여기서: `rollout.py --stages 5,50,100`. 50대면 5% = 3대(올림).
+
+## 헬스 게이트 (health gate)
+- 단계를 넘어가기 전에 **건강한지 확인하는 문**. 여기서는 새 버전을 받은 장치의 텔레메트리 `state` 가 `ok` 인지 `health_wait` 초 동안 본다. 허용치(`max_fail`)를 넘으면 롤백.
+- 여기서: `Rollout.run_stage()`.
 
 ## 상태 머신 (State Machine)
-- 로봇의 **상태**(초기화 → 대기 → 동작 → 고장 → 복구)와 **전환 규칙**을 표로 정한 것. "고장에서 바로 동작으로는 못 간다" 같은 규칙이 코드가 된다.
-- 여기서: `rt_control` 3주차 추가.
+- 로봇의 **상태**(INIT → READY → RUNNING → FAULT → RECOVERING)와 **전환 규칙**을 표로 정한 것. "고장(FAULT)에서 바로 동작(RUNNING)으로는 못 간다, 복구(RECOVERING)를 100주기 거쳐야 한다" 같은 규칙이 코드가 된다.
+- **표 기반(table-driven)**: 허용 전이를 `{지금 상태, 사건, 다음 상태}` 줄의 표로 두고, 표에 없는 전이는 거절하고 `illegal_events` 로 센다. if 문 더미보다 읽기 쉽고, 표 한 줄이 곧 테스트 한 줄이다.
+- 여기서: `rt_core/robot_state_machine.hpp/.cpp`, 사건을 넣는 곳은 `control_step.cpp` 의 `update_state_machine()`, 결과는 `/rt_status` 의 `state`.
 
 ## MuJoCo
 - 로봇 **물리 시뮬레이터**. 실물 없이 관절·중력·충돌을 계산. CPU에서 빠르고 결정적(같은 입력 → 같은 결과)이라 자동 테스트에 맞다.
-- 여기서: `backends/mujoco`.
+- 용어: **mjModel**(설계도, 읽기 전용) · **mjData**(지금 상태) · **qpos/qvel**(관절 각/속도 배열) · **ctrl**(액추에이터 입력; position 액추에이터면 "원하는 각") · **mj_step**(물리 한 걸음) · **timestep**(한 걸음의 시간; 제어 주기 1 ms 에 맞춘다).
+- 여기서: `rt_core/mujoco_backend.cpp`(Backend 구현), 모델은 MuJoCo Menagerie 의 SO-ARM100(`scripts/get_mujoco.sh`), 안내는 `backends/mujoco/README.md`.
+
+## Menagerie (MuJoCo Menagerie)
+- Google DeepMind 가 관리하는 **검증된 로봇 모델 모음**(MJCF xml). 직접 모델링하지 않고 가져다 쓴다.
+- 여기서: `third_party/mujoco_menagerie/trs_so_arm100/scene.xml` (SO-ARM100; SO-101 과 같은 5축+그리퍼).
 
 ## CI (GitHub Actions)
 - 코드를 올릴 때마다 **자동으로 빌드·테스트를 돌리는 검사원**. 통과하면 README에 초록 배지.
@@ -135,6 +150,39 @@
 - 행을 하나씩 INSERT 하는 대신 묶음을 한 번에 밀어 넣는 명령. 수십 배 빠르다.
 - 여기서: `collector.py` 의 `write_db()`.
 
-## 수집 지연 (ingest latency)
-- 장치가 측정한 시각 → 서버가 DB 에 넣은 시각. 1초 묶음 때문에 최대 약 1초가 더해진다(설계상). 같은 시계(NTP)일 때만 의미.
-- 여기서: `telemetry.ingest_latency_ms`, `collector_stats.lat_p95_ms`.
+## 전달 지연 (transit latency) — 코드의 `ingest_latency_ms`
+- 장치가 측정한 시각 → 메시지가 **수집기에 도착**한 시각. 같은 시계(NTP)일 때만 의미.
+- D2 문서에 "수집 지연"이라 썼지만 정확히는 **도착** 기준이다. DB 에 보이기까지는 1초 묶음 적재가 최대 약 1초 더 걸린다 — 그 1초는 이 숫자에 **들어 있지 않다**. 컬럼 이름은 호환을 위해 그대로 둔다.
+- 여기서: `telemetry.ingest_latency_ms`, `collector_stats.lat_p95_ms`, 수집기 출력의 `transit ms`.
+
+## QoS 0 / 1 (MQTT)
+- 0 = **보내고 잊음**(가장 가볍다, 확인 없음). 1 = **적어도 한 번**(브로커가 받았다는 확인(PUBACK)까지, 안 오면 재전송).
+- 여기서: 텔레메트리 기본 0, 재전송·명령은 1. 수집기가 죽어도 유실 0 을 원하면 장치 `--telemetry-qos 1` + 수집기 `--qos 1`(지속 세션) 둘 다 필요.
+
+## 지속 세션 (persistent session, clean_session=False)
+- 구독자가 끊겨 있는 동안 브로커가 **그 구독자 몫의 QoS 1 메시지를 대신 들고 있다가** 다시 붙으면 넘겨 주는 것. 구독자는 같은 client_id 로 붙어야 한다.
+- 여기서: `collector.py --qos 1` (client_id "collector" 고정), 브로커 `max_queued_messages 20000`.
+
+## keepalive / PINGREQ (MQTT)
+- 클라이언트가 **이 시간 동안 아무것도 못 받으면** 살아 있다는 신호(PINGREQ)를 보낸다. 브로커는 1.5배 시간 안에 아무 소리가 없으면 끊고 유언을 발행한다.
+- 여기서: 기본 10초. 전달 지연이 10초마다 튀는 현상의 용의자 → `virtual_fleet.py --keepalive 30` 으로 실험(`fleet/tools/diag.py`).
+
+## backlog (수집기)
+- DB 가 죽어서 못 넣은 **1초 묶음들을 메모리에 쌓아 둔 것**. DB 가 돌아오면 오래된 것부터 넣는다. 상한(20만 행)을 넘으면 가장 오래된 묶음을 버리고 센다.
+- 여기서: `collector.py` 의 `drain_backlog()`, 통계 `backlog_rows`, 대시보드 패널 12.
+
+## 장애 주입 (fault injection, chaos)
+- 고장을 **일부러** 내고 시스템이 어떻게 감지·복구하는지 **숫자로** 재는 것. "장애에 강하다"를 말이 아니라 표로 보여 준다.
+- 여기서: `fleet/chaos/inject.py --fault broker|db|collector|bad_firmware` → `docs/measurements/fault_*.json` → 표③-2.
+
+## 마이그레이션 (DB migration)
+- 이미 데이터가 있는 DB 의 **스키마를 바꾸는 번호 붙은 SQL 파일**. 어디까지 적용했는지 표(`schema_migrations`)에 기록해 두 번 돌려도 안전하다.
+- 여기서: `fleet/db/migrations/002_ota.sql`, `003_collector_resilience.sql`, `fleet/db/migrate.py`.
+
+## 가짜(fake) 모듈 — 테스트용 브로커·DB
+- 진짜 Mosquitto·PostgreSQL 없이 **같은 함수 이름을 가진 간단한 흉내**를 끼워 넣어 논리를 테스트하는 기법. 네트워크 없이 1초 안에 돈다. 진짜로 하는 검증은 `integration.sh`.
+- 여기서: `fleet/tests/fake_mqtt.py`(프로세스 안 브로커, 와일드카드·유언·끊김 흉내), `fake_psycopg.py`(쓰기 실패 스위치).
+
+## rpath
+- 실행 파일 안에 **공유 라이브러리를 찾을 경로를 적어 두는 것**. 없으면 `LD_LIBRARY_PATH` 를 매번 설정해야 한다.
+- 여기서: MuJoCo 를 켜면 CMake 가 `libmujoco.so` 위치를 rpath 로 넣는다 (`-Wl,-rpath`, `CMAKE_INSTALL_RPATH_USE_LINK_PATH`).

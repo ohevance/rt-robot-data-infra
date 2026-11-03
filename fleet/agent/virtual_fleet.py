@@ -60,12 +60,16 @@ def main():
     ap.add_argument("--port", type=int, default=1883)
     ap.add_argument("--duration", type=float, default=0, help="초. 0 이면 Ctrl+C 까지")
     ap.add_argument("--prefix", default="vdev")
+    ap.add_argument("--keepalive", type=int, default=10, help="MQTT keepalive 초 (진단: 지연 튐 주기가 이 값을 따라가는지)")
+    ap.add_argument("--telemetry-qos", type=int, default=0, choices=[0, 1],
+                    help="텔레메트리 QoS. 1 이면 수집기가 잠깐 죽어도(지속 세션) 브로커가 대신 들고 있다")
     a = ap.parse_args()
 
     agents = []
     for i in range(a.count):
         device_id = f"{a.prefix}-{i + 1:03d}"
-        agent = DeviceAgent(device_id, a.broker, a.port, 1.0 / a.rate, VirtualMetrics(seed=i), fw_version="1.0.0")
+        agent = DeviceAgent(device_id, a.broker, a.port, 1.0 / a.rate, VirtualMetrics(seed=i), fw_version="1.0.0",
+                            keepalive_s=a.keepalive, telemetry_qos=a.telemetry_qos)
         agents.append(agent)
 
     stop_flag = {"stop": False}
@@ -80,7 +84,7 @@ def main():
     for agent in agents:
         agent.start()
         time.sleep(0.01)
-    print(f"virtual fleet: {a.count} devices @ {a.rate} Hz -> {a.broker}:{a.port}  (Ctrl+C to stop)")
+    print(f"virtual fleet: {a.count} devices @ {a.rate} Hz -> {a.broker}:{a.port}  keepalive={a.keepalive}s qos={a.telemetry_qos}  (Ctrl+C to stop)")
 
     started = time.monotonic()
     while not stop_flag["stop"]:

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# 통합 테스트 (CI 2단계 = 이 스크립트). 진짜 Mosquitto·TimescaleDB 컨테이너 위에서:
+#   수집기(--qos 1) + 가상 장치 N대(QoS 1) → 장애 주입 3종(broker·db·collector) + 나쁜 펌웨어 롤백 + 정상 OTA
+#   → fleet/chaos/assert_results.py 로 "유실 0 · 복구됨 · 롤백됨" 판정 → 표③-2/3 생성
+#
+# WSL 에서:   bash fleet/tests/integration.sh            (약 3~4분. docker 가 떠 있어야 한다)
+# 끝나면 컨테이너는 그대로 둔다 (KEEP=0 bash fleet/tests/integration.sh 이면 내린다)
+# 결과: build/integration/*.json, build/integration/table3_ci.md, 로그 build/integration/*.log
+# ---------------------------------------------------------------------------
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+COUNT=${COUNT:-10}
+RATE=${RATE:-2}
+OUT=build/integration
+mkdir -p "$OUT"
+COMPOSE="docker compose -f fleet/docker-compose.yml"
+
+cleanup() {
+  echo "--- 정리"
+  pkill -INT -f agent/virtual_fleet.py || true
+  sleep 1
+  pkill -TERM -f collector/collector.py || true
+  if [ "${KEEP:-1}" = "0" ]; then $COMPOSE down -v; fi
+}
+trap cleanup EXIT
+
+echo "--- 1) 브로커·DB 올리기"
+$COMPOSE up -d mqtt db
+for i in $(seq 1 90); do
+  if docker exec fleet_db pg_isready -U fleet -d fleet >/dev/null 2>&1; then break; fi
+  sleep 1
+done
+docker exec fleet_db pg_isready -U fleet -d fleet
+python3 fleet/db/migrate.py
+
+echo "--- 2) 수집기(지속 세션) + 가상 장치 ${COUNT}대 @ ${RATE} Hz (QoS 1)"
+pkill -TERM -f collector/collector.py || true
+python3 fleet/collector/collector.py --qos 1 > "$OUT/collector.log" 2>&1 &
+python3 fleet/agent/virtual_fleet.py --count "$COUNT" --rate "$RATE" --telemetry-qos 1 --prefix ci > "$OUT/fleet.log" 2>&1 &
+sleep 8
+tail -n 2 "$OUT/collector.log"
+
+echo "--- 3) 장애 주입"
+python3 fleet/chaos/inject.py --fault broker    --duration 5 --settle 8 --out "$OUT/fault_broker.json"
+python3 fleet/chaos/inject.py --fault db        --duration 5 --settle 8 --out "$OUT/fault_db.json"
+python3 fleet/chaos/inject.py --fault collector --duration 5 --settle 8 --label qos1 --out "$OUT/fault_collector_qos1.json"
+python3 fleet/chaos/inject.py --fault bad_firmware --out "$OUT/fault_bad_firmware.json" || true   # 롤백이면 종료 코드 1 이 정상
+
+echo "--- 4) 정상 OTA"
+python3 fleet/ota/rollout.py --version 1.1.0 --apply-s 1 --health-wait 2 --out "$OUT/ota_1.1.0.json"
+
+echo "--- 5) 판정"
+python3 fleet/chaos/assert_results.py "$OUT/fault_broker.json" "$OUT/fault_db.json" "$OUT/fault_collector_qos1.json" \
+    "$OUT/fault_bad_firmware.json" "$OUT/ota_1.1.0.json"
+python3 scripts/make_table3.py --minutes 10 --label "integration ${COUNT}대 ${RATE} Hz" --measurements "$OUT" --out "$OUT/table3_ci.md"
+cat "$OUT/table3_ci.md"

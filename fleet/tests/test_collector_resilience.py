@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""수집기 내성 테스트 — 가짜 브로커 + 가짜 DB 위에서 "DB 가 죽었다 살았다"를 흉내 낸다.
+
+확인하는 것
+  1) 평소: 1초 묶음이 telemetry 에 들어가고 backlog 는 0
+  2) DB 죽음: 쓰기가 실패하면 묶음이 backlog 에 남고 db_errors 가 센다. 데이터는 버리지 않는다
+  3) DB 복귀: 다음 flush 에서 오래된 묶음부터 전부 들어간다 (순서 유지), backlog 0
+  4) 상한: MAX_BACKLOG_ROWS 를 넘으면 가장 오래된 묶음을 버리고 backlog_dropped 로 센다
+  5) --qos 1 이면 지속 세션(clean_session=False)으로 붙고 telemetry 를 QoS 1 로 구독한다
+  6) 옛 스키마(003 미적용)면 check_schema 가 False 를 돌려준다 (안내 후 종료용)
+
+실행:  python3 fleet/tests/test_collector_resilience.py
+"""
+import json
+import os
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import fake_mqtt  # noqa: E402
+import fake_psycopg  # noqa: E402
+
+fake_mqtt.install()
+fake_psycopg.install()
+BROKER = fake_mqtt.BROKER
+
+sys.path.insert(0, os.path.join(HERE, "..", "collector"))
+import collector  # noqa: E402
+from collector import Collector  # noqa: E402
+
+fail_count = 0
+
+
+def check(condition, message):
+    global fail_count
+    if not condition:
+        print("FAIL:", message)
+        fail_count += 1
+
+
+def publish_telemetry(device_id, seq):
+    payload = json.dumps({"device_id": device_id, "seq": seq, "ts_ns": time.time_ns() - 1_000_000,
+                          "cpu_pct": 1, "temp_c": 2, "mem_pct": 3, "rssi": -1, "fw_version": "1.0.0", "state": "ok"})
+    BROKER.publish(f"fleet/{device_id}/telemetry", payload.encode("utf-8"), 0, False)
+
+
+def seqs_in_store():
+    return [row[2] for row in fake_psycopg.STORE["telemetry"]]
+
+
+def test_db_outage_and_recovery():
+    BROKER.reset()
+    fake_psycopg.reset()
+    c = Collector("localhost", 1883, "postgresql://fake", dry_run=False)
+    check(c.check_schema() is True, "새 스키마면 check_schema True")
+
+    # 1) 평소
+    for seq in range(3):
+        publish_telemetry("a", seq)
+    s = c.flush_once()
+    check(s["msgs"] == 3 and s["backlog_rows"] == 0 and s["db_errors"] == 0, "평소: 3행 적재, backlog 0")
+    check(len(fake_psycopg.STORE["telemetry"]) == 3, "telemetry 에 3행")
+    check(len(fake_psycopg.STORE["collector_stats"]) == 1, "통계 한 줄")
+    check(fake_psycopg.STORE["collector_stats"][0][8] == 0, "통계에 backlog_rows=0 이 들어간다")
+
+    # 2) DB 죽음
+    fake_psycopg.FAIL["write"] = True
+    for seq in range(3, 5):
+        publish_telemetry("a", seq)
+    s = c.flush_once()
+    check(s["backlog_rows"] == 2 and s["db_errors"] == 1, "DB 죽음: 2행이 backlog, 오류 1")
+    check(c.conn is None, "실패하면 연결을 버리고 다음에 새로 붙는다")
+    for seq in range(5, 7):
+        publish_telemetry("a", seq)
+    s = c.flush_once()
+    check(s["backlog_rows"] == 4 and s["db_errors"] == 2, "계속 죽어 있음: backlog 4, 오류 2")
+    check(len(fake_psycopg.STORE["telemetry"]) == 3, "죽은 동안 DB 에는 아무것도 안 들어갔다")
+    check(len(fake_psycopg.STORE["collector_stats"]) == 1, "죽은 동안 통계도 못 쓴다 (연결 없음)")
+
+    # 3) DB 복귀
+    fake_psycopg.FAIL["write"] = False
+    publish_telemetry("a", 7)
+    s = c.flush_once()
+    check(s["backlog_rows"] == 0, "복귀: backlog 가 0 으로")
+    check(seqs_in_store() == [0, 1, 2, 3, 4, 5, 6, 7], "오래된 것부터 순서대로 전부 들어갔다 (유실 0)")
+    check(c.backlog_dropped == 0, "버린 행 없음")
+    check(len(fake_psycopg.STORE["collector_stats"]) == 2, "복귀 뒤 통계가 다시 써진다")
+
+
+def test_backlog_limit():
+    BROKER.reset()
+    fake_psycopg.reset()
+    c = Collector("localhost", 1883, "postgresql://fake", dry_run=False)
+    original_limit = collector.MAX_BACKLOG_ROWS
+    collector.MAX_BACKLOG_ROWS = 5
+    fake_psycopg.FAIL["write"] = True
+    for batch_index in range(3):
+        for k in range(3):
+            publish_telemetry("b", batch_index * 3 + k)
+        c.flush_once()
+    check(c.backlog_rows == 3 and c.backlog_dropped == 6, "상한 5: 묶음 3개(9행) 중 오래된 2개(6행)를 버리고 3행만 남김")
+    fake_psycopg.FAIL["write"] = False
+    c.flush_once()
+    check(seqs_in_store() == [6, 7, 8], "복귀하면 남아 있던 마지막 묶음만 들어간다")
+    collector.MAX_BACKLOG_ROWS = original_limit
+
+
+def test_persistent_session_option():
+    BROKER.reset()
+    fake_psycopg.reset()
+    c0 = Collector("localhost", 1883, "postgresql://fake", dry_run=True, qos=0)
+    check(c0.client.clean_session is True, "qos 0: 보통 세션")
+    check(("fleet/+/telemetry", 0) in c0.client.subscriptions, "qos 0 으로 구독")
+    c1 = Collector("localhost", 1883, "postgresql://fake", dry_run=True, qos=1)
+    check(c1.client.clean_session is False and c1.client.client_id == "collector", "qos 1: 지속 세션 + 고정 client_id")
+    check(("fleet/+/telemetry", 1) in c1.client.subscriptions, "qos 1 로 구독")
+
+
+def test_old_schema_detected():
+    BROKER.reset()
+    fake_psycopg.reset()
+    fake_psycopg.FAIL["schema_old"] = True
+    c = Collector("localhost", 1883, "postgresql://fake", dry_run=False)
+    check(c.check_schema() is False, "003 미적용 스키마면 False (migrate.py 안내)")
+
+
+if __name__ == "__main__":
+    test_db_outage_and_recovery()
+    test_backlog_limit()
+    test_persistent_session_option()
+    test_old_schema_detected()
+    if fail_count == 0:
+        print("OK: collector resilience")
+        sys.exit(0)
+    print(f"FAILED: {fail_count}")
+    sys.exit(1)

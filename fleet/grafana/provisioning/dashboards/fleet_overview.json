@@ -101,7 +101,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "수집 지연 p95 (ms, 최근 1초)",
+      "title": "전달 지연 p95 (ms, 장치→수집기)",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "timescale"
@@ -227,7 +227,7 @@
     {
       "id": 6,
       "type": "stat",
-      "title": "멈춤(tripped) 장치",
+      "title": "멈춤·고장 장치 (tripped/fault/updating)",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "timescale"
@@ -244,7 +244,7 @@
             "type": "grafana-postgresql-datasource",
             "uid": "timescale"
           },
-          "rawSql": "SELECT count(*) AS tripped FROM devices WHERE state = 'tripped' AND last_seen > now() - interval '5 seconds'",
+          "rawSql": "SELECT count(*) AS bad FROM devices WHERE state IN ('tripped', 'fault', 'updating', 'recovering') AND last_seen > now() - interval '5 seconds'",
           "format": "table",
           "rawQuery": true,
           "refId": "A"
@@ -312,7 +312,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "수집 지연 (ms): p50 / p95 / max",
+      "title": "전달 지연 (ms): p50 / p95 / max — 장치 측정 → 수집기 도착",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "timescale"
@@ -439,6 +439,124 @@
       }
     },
     {
+      "id": 12,
+      "type": "timeseries",
+      "title": "수집기 backlog (DB 에 못 넣고 들고 있는 행) / DB 오류 누적",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "timescale"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescale"
+          },
+          "rawSql": "SELECT time, backlog_rows AS backlog, db_errors FROM collector_stats WHERE $__timeFilter(time) ORDER BY time",
+          "format": "time_series",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "펌웨어 버전별 장치 수 (OTA 단계 배포)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "timescale"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescale"
+          },
+          "rawSql": "SELECT time_bucket('5 seconds', time) AS time, fw_version AS metric, count(DISTINCT device_id) FROM telemetry WHERE $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1",
+          "format": "time_series",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "최근 이벤트 (장애 주입 · OTA · 온/오프라인)",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "timescale"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescale"
+          },
+          "rawSql": "SELECT time, kind, device_id, detail::text AS detail FROM events WHERE $__timeFilter(time) ORDER BY time DESC LIMIT 50",
+          "format": "table",
+          "rawQuery": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
       "id": 11,
       "type": "table",
       "title": "장치 목록",
@@ -448,7 +566,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 35,
         "w": 24,
         "h": 10
       },

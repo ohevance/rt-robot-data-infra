@@ -1,11 +1,13 @@
 # ---------------------------------------------------------------------------
-# 관제 서버 한 벌 (3개 컨테이너). 공고 ②③ "실시간 로깅·모니터링·시각화" 의 몸통.
+# 관제 서버 한 벌 (3개 컨테이너 + 선택 1개). 공고 ②③ "실시간 로깅·모니터링·시각화" 의 몸통.
 #
 #   장치들 ──MQTT──▶ [mqtt: Mosquitto 브로커] ──▶ (collector.py 가 꺼내서) ──▶ [db: TimescaleDB] ──▶ [grafana: 상황판]
 #
 # 시작:  docker compose -f fleet/docker-compose.yml up -d
 # 중지:  docker compose -f fleet/docker-compose.yml down        (데이터 유지)
 # 초기화: docker compose -f fleet/docker-compose.yml down -v    (데이터까지 삭제)
+# 수집기까지 컨테이너로:  docker compose -f fleet/docker-compose.yml --profile collector up -d
+#   (기본은 수집기를 호스트에서 python3 로 띄운다 — 출력을 바로 보기 위해. 둘 다 띄우면 행이 두 배로 들어가니 하나만)
 # ---------------------------------------------------------------------------
 services:
   mqtt:
@@ -43,6 +45,22 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - db
+
+  # 선택: 수집기 컨테이너 (--profile collector 를 붙여야 뜬다)
+  collector:
+    build:
+      context: .
+      dockerfile: collector/Dockerfile
+    container_name: fleet_collector
+    profiles: ["collector"]
+    environment:
+      BROKER: mqtt
+      DB_DSN: postgresql://fleet:fleet@db:5432/fleet
+      COLLECTOR_QOS: ${COLLECTOR_QOS:-0}      # 1 이면 지속 세션 (수집기 끊김 시 유실 0)
+    depends_on:
+      - mqtt
+      - db
+    restart: unless-stopped
 
 volumes:
   fleet_db_data: {}

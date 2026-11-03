@@ -82,3 +82,60 @@
 ```
 - 장치는 브로커만 안다(서로 모른다). 서버는 장치 수와 무관하게 같은 코드. 300대도 `--count 300`.
 - 유실은 "없다"가 아니라 "센다": 장치는 seq 를, 서버는 seq 의 빈칸을 센다. 끊김은 장치 버퍼가 메운다.
+
+## 7. D3: 로봇 상태 머신 (rt_core/robot_state_machine.cpp) — RT 스레드 안, 표 하나
+
+```
+            INIT_DONE            COMMAND                 WATCHDOG_TRIP
+  [INIT] ───────────▶ [READY] ───────────▶ [RUNNING] ───────────────▶ [FAULT]
+                        ▲  ▲                                             │ COMMAND (명령이 다시 옴)
+                        │  │ RECOVERED (정상 100주기)                      ▼
+                        │  └────────────────────────────────────── [RECOVERING] ──WATCHDOG_TRIP──▶ [FAULT]
+                        │ WATCHDOG_TRIP (READY 에서는 그대로 READY)
+                 어느 상태 + STOP ──▶ [INIT]        표에 없는 조합 → 거절 + illegal_events++
+```
+- 사건을 넣는 곳은 한 군데(`ControlStep::update_state_machine`). 결과는 `JointStateSample.robot_state` → `/rt_status` `"state"` → 관제 다리를 거쳐 장치 `state` 로 올라간다(대시보드 "멈춤·고장 장치").
+
+## 8. D3: OTA 단계 배포 (fleet/ota/rollout.py) — 서버가 판단, 장치는 적용/복원만
+
+```
+ rollout.py ── 1) 3초 듣고 살아 있는 장치 N대 ──▶ 2) 5%(ceil) 에 {cmd: ota, version} ──▶ 3) 텔레메트리 fw_version 이 바뀔 때까지 대기
+                                                                                           │
+   ┌───────────────── 6) 다음 단계 50% → 100% ◀── 통과 ── 4) health_wait 초 뒤 state != ok 인 장치 수 ≤ max_fail ?
+   │                                                                                       │ 초과
+   ▼                                                                                       ▼
+ 완료 (ota_rollouts.success = true)                    5) 새 버전 받은 전부에 {cmd: ota_rollback} → 이전 버전·ok 까지 시간 측정 → 중단
+```
+- 장치(`device_agent.py`): ota → 별도 스레드에서 apply_s 초 "updating" → 버전 교체 → ok 또는(bad) fault. ota_rollback → 직전 버전·ok. 겹치는 ota 는 거절.
+- 숫자: 50대·나쁜 펌웨어 → 닿은 장치 3/50, 롤백 ≈ 1~2초(1 Hz 텔레메트리 반영 포함). 표③-3.
+
+## 9. D4: 장애 4종과 복구 경로 — "유실은 없게"가 아니라 "세게"
+
+```
+  장애                 누가 막나                         복구 판정(DB 에서)                    유실(seq 빈칸)
+  ─────────────────    ───────────────────────────────    ───────────────────────────────────    ─────────────
+  브로커 중단          장치 버퍼(store-and-forward)       첫 msgs/s>0 · 전 장치 복귀              0 (QoS 1) / ≤장치 수 (QoS 0)
+  DB 중단              수집기 backlog(Batch 메모리)        DB 응답 · backlog_rows=0                0
+  수집기 중단          브로커 지속 세션(QoS 1 양쪽)         첫 collector_stats · 전 장치             0 (qos1) / 장치×초×Hz (qos0)
+  나쁜 펌웨어          헬스 게이트 + 자동 롤백              ota_rollouts.rollback_s                 닿은 장치 5% 만
+  (RT) 명령 끊김       워치독 → FAULT → RECOVERING          /rt_status state                        50 ms 감지 + 100주기 복구 = 150 ms
+```
+- 주입·측정: `fleet/chaos/inject.py` → `docs/measurements/fault_*.json` → `scripts/make_table3.py` 표③-2. 판정: `chaos/assert_results.py`.
+- CI 2단계(`fleet_integration` 잡)가 진짜 컨테이너 위에서 이 표의 위 네 줄을 매 push 마다 다시 증명한다.
+
+## 10. D5: 백엔드 자리에 MuJoCo — 제어 코드는 그대로
+
+```
+                          ┌─ SimLagBackend   : position += (target-position)*alpha          (D1, 의존성 0)
+ ControlStep ── Backend ──┼─ MujocoBackend   : ctrl[act]=target; mj_step×N; qpos/qvel 읽기   (D5, -DRT_CORE_WITH_MUJOCO=ON)
+   (불변)       (인터페이스)└─ FeetechSerial  : 서보 버스 (2주 계획 밖)
+```
+- 모델: Menagerie SO-ARM100 (`robots/so101.yaml` 의 `mujoco.model`, 관절 이름 매핑 `mujoco.joints`). 노드는 파라미터 `backend` 로 고른다.
+- 숫자: 한 주기 비용(mj_step + read) p50/p99/max → `/rt_status` `work_us`, 테스트 JSON `mujoco_backend_ci.json`. 판정: p99 < 900 us (1 kHz 안).
+
+## 11. CI 3잡
+
+```
+ push ──▶ [rt_core] 빌드·ctest 4·jitter 2초 드롭 0·fleet 가짜 테스트 3·대시보드 JSON ──┬──▶ [fleet_integration] 진짜 mqtt/db 컨테이너 + 장애 3종 + 롤백 + OTA → 판정
+                                                                              └──▶ [mujoco] MuJoCo 3.x 내려받아 빌드 → SO-ARM100 위 2000주기 테스트
+```

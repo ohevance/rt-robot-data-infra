@@ -1,28 +1,40 @@
-# fleet — 관제: 장치 N대 → MQTT → 수집기 → TimescaleDB → Grafana (공고 ②③)
+# fleet — 관제: 장치 N대 → MQTT → 수집기 → TimescaleDB → Grafana + OTA + 장애 주입 (공고 ②③)
 
 ```
  [가상 장치 x50: virtual_fleet.py] ──┐
  [RT 노드 다리: ros_status_bridge.py] ─┼─MQTT (fleet/<id>/telemetry, 1 Hz)──▶ [Mosquitto] ──▶ [collector.py: 1초 묶음 COPY] ──▶ [TimescaleDB] ──▶ [Grafana :3000]
- [실물 Pi (나중에)]                   ┘                                                               └─ collector_stats (초당 메시지·적재 시간·수집 지연)
+ [실물 Pi (나중에)]                   ┘        ▲                                   │  DB 죽으면 backlog 에 보관        └─ collector_stats (초당 메시지·적재 시간·전달 지연·backlog)
+                                 끊기면 버퍼 ──┘ 재접속 시 QoS 1 재전송             │
+ [ota/rollout.py] ──fleet/<id>/cmd {ota | ota_rollback}──▶ 장치 (5% → 50% → 100%, 헬스 게이트, 자동 롤백)
+ [chaos/inject.py] ── docker stop mqtt / db · 수집기 kill · 나쁜 펌웨어 ──▶ 감지·복구·유실을 숫자로 (표③-2)
 ```
 
 | 파일 | 역할 |
 |---|---|
-| `docker-compose.yml` | 브로커·DB·Grafana 컨테이너 3개 |
-| `db/init.sql` | 스키마: devices · telemetry(하이퍼테이블) · events · collector_stats |
-| `agent/device_agent.py` | 장치 한 대: 텔레메트리 발행, 끊기면 버퍼 → 재접속 시 재전송, 유언(LWT), 명령 수신 |
-| `agent/virtual_fleet.py` | 가상 장치 N대 |
-| `agent/ros_status_bridge.py` | `/rt_status` → 장치 `rt-node-1` 로 (RT 노드가 51번째 장치) |
-| `collector/collector.py` | 구독 → 파싱 → 1초 묶음 적재 + 통계 |
+| `docker-compose.yml` | 브로커·DB·Grafana 컨테이너 3개 (+ 선택: 수집기 컨테이너 `--profile collector`) |
+| `db/init.sql` · `db/migrations/` · `db/migrate.py` | 스키마 · 이미 떠 있는 DB 에 새 표/컬럼 추가(002 OTA, 003 수집기 내성) |
+| `agent/device_agent.py` | 장치 한 대: 텔레메트리 발행, 끊기면 버퍼 → 재접속 시 재전송, 유언(LWT), 명령 수신(ping·health·ota·ota_rollback) |
+| `agent/virtual_fleet.py` | 가상 장치 N대 (`--keepalive`, `--telemetry-qos 0|1`) |
+| `agent/ros_status_bridge.py` | `/rt_status` → 장치 `rt-node-1` 로 (RT 노드가 51번째 장치. 상태 머신 이름이 장치 state 로) |
+| `collector/collector.py` | 구독 → 파싱 → 1초 묶음 적재 + 통계. DB 끊기면 backlog, `--qos 1` 이면 지속 세션 |
+| `ota/rollout.py` | OTA 단계 배포 + 헬스 게이트 + 자동 롤백, 롤백 시간 측정 |
+| `chaos/inject.py` · `chaos/assert_results.py` | 장애 주입 4종(broker·db·collector·bad_firmware) → JSON · 기대대로 복구됐는지 판정 |
+| `tools/diag.py` | DB 진단: 오프라인 이벤트 분류, 전달 지연 튐 주기 |
 | `grafana/` | 데이터 소스·대시보드 자동 등록 (`make_dashboard.py` 가 JSON 생성) |
-| `tests/test_fleet_logic.py` | 브로커·DB 없이 도는 단위 테스트 |
+| `tests/` | 브로커·DB 없이 도는 단위 테스트 3개(가짜 브로커 `fake_mqtt.py`·가짜 DB `fake_psycopg.py`) + 진짜 컨테이너로 도는 `integration.sh` |
+
+## 0. 단위 테스트 (어디서나, 1분)
+```bash
+python3 fleet/tests/test_fleet_logic.py            # 파싱·버퍼·명령·OTA·유언 → "OK: fleet logic"
+python3 fleet/tests/test_ota_rollout.py            # 가상 20대 위에서 정상 배포 / 나쁜 펌웨어 롤백 / 적용 시간 초과 → "OK: ota rollout"
+python3 fleet/tests/test_collector_resilience.py   # DB 죽음→backlog→복귀, 상한, 지속 세션 옵션 → "OK: collector resilience"
+```
 
 ## 1. 한 번만: 파이썬 의존성
 ```bash
 cd ~/rt-robot-data-infra
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r fleet/requirements.txt
-python3 fleet/tests/test_fleet_logic.py      # "OK: fleet logic"
 ```
 
 ## 2. 서버 올리기 (터미널 1)
@@ -30,45 +42,73 @@ python3 fleet/tests/test_fleet_logic.py      # "OK: fleet logic"
 cd ~/rt-robot-data-infra
 docker compose -f fleet/docker-compose.yml up -d
 docker compose -f fleet/docker-compose.yml ps        # 3개 모두 running 이면 됨 (db 는 처음 20초쯤 걸림)
+python3 fleet/db/migrate.py                           # 이미 떠 있던 DB 에 새 표/컬럼 추가 (처음 뜬 DB 는 "skip" 만 나옴)
 ```
 Grafana: 브라우저에서 http://localhost:3000 → 대시보드 "Fleet Overview" (로그인 없이 보임. 편집은 admin/admin)
 
 ## 3. 수집기 (터미널 2)
 ```bash
 cd ~/rt-robot-data-infra && source .venv/bin/activate
-python3 fleet/collector/collector.py
+python3 fleet/collector/collector.py            # 기본 (QoS 0)
+python3 fleet/collector/collector.py --qos 1    # 지속 세션: 수집기가 잠깐 죽어도 브로커가 메시지를 들고 있는다 (장치도 --telemetry-qos 1 이어야 함)
 ```
-1초마다 한 줄: `msgs/s=  50  online=  50  insert=   12.3 ms  ingest_latency ms p50=510 p95=980 max=1010  bad=0`
+1초마다 한 줄: `msgs/s=  50  online=  50  insert=   12.3 ms  transit ms p50=510 p95=980 max=1010  bad=0  backlog=0  db_err=0`
+- `transit` = 장치 측정 → 수집기 도착 (전달 지연). DB 에 보이기까지는 1초 묶음이 최대 1초 더 걸린다.
+- `backlog` = DB 에 못 넣고 들고 있는 행 수. DB 가 죽으면 올라가고 돌아오면 0 으로.
 
 ## 4. 가상 장치 50대 (터미널 3)
 ```bash
 cd ~/rt-robot-data-infra && source .venv/bin/activate
-python3 fleet/agent/virtual_fleet.py --count 50 --rate 1.0
+python3 fleet/agent/virtual_fleet.py --count 50 --rate 1.0                      # 기본
+python3 fleet/agent/virtual_fleet.py --count 50 --rate 1.0 --telemetry-qos 1    # 수집기 --qos 1 과 짝
 ```
 Grafana 에 50대가 올라오고 초당 메시지 50 이 보이면 성공. 300대도 같은 명령(`--count 300`).
 
-## 5. 끊김·재전송 시험 (터미널 4)
+## 5. OTA 단계 배포 (터미널 4)
 ```bash
-docker compose -f fleet/docker-compose.yml stop mqtt     # 브로커를 10초쯤 죽인다
-sleep 10
-docker compose -f fleet/docker-compose.yml start mqtt
+python3 fleet/ota/rollout.py --version 1.1.0              # 정상: 5% → 50% → 100%, 각 단계 헬스 5초 관찰. 약 30초
+python3 fleet/ota/rollout.py --version 1.2.0-bad --bad    # 나쁜 펌웨어: 5%(3대)에서 fault → 롤백. 롤백 시간이 찍힌다
 ```
-→ 수집기 msgs/s 가 0 으로 떨어졌다가, 브로커가 돌아오면 밀린 메시지가 몰려 들어오고(버퍼 재전송) 다시 50 으로. 가상 장치 종료 시 `buffered=... flushed=...` 가 같은 수.
+결과 JSON `docs/measurements/ota_<version>.json`, DB `ota_rollouts` 표, 이벤트 `events(kind='ota')`. Grafana 장치 표에서 fw_version 이 바뀌는 것이 보인다.
 
-## 6. 표③ 만들기
+## 6. 장애 주입 4종 (터미널 4) — 표③-2
 ```bash
-python3 scripts/make_table3.py --minutes 5 --label "가상 50대 1 Hz" --out docs/measurements/table3.md
-cat docs/measurements/table3.md
+python3 fleet/chaos/inject.py --fault broker --duration 10          # 브로커 10초 중단 → 장치 버퍼 → 재전송. 유실 0 기대
+python3 fleet/chaos/inject.py --fault db --duration 10              # DB 10초 중단 → 수집기 backlog → 복귀 적재. 유실 0 기대
+python3 fleet/chaos/inject.py --fault collector --duration 10 --label qos0   # 수집기 죽임 (QoS 0 이면 그 동안 유실 — 숫자로 남긴다)
+python3 fleet/chaos/inject.py --fault collector --duration 10 --label qos1   # 수집기 --qos 1 + 장치 --telemetry-qos 1 로 다시: 유실 0
+python3 fleet/chaos/inject.py --fault bad_firmware                  # 나쁜 펌웨어 → 5% 에서 롤백
+python3 fleet/chaos/assert_results.py docs/measurements/fault_*.json   # 기대대로였나 판정
+```
+각 장애마다 기준선(장치 수·msgs/s) → 주입 → 감지 시각 → 복구 시각 → 15초 뒤 유실(seq 빈칸) 계산 → `docs/measurements/fault_<fault>.json`.
+`collector` 장애는 수집기가 호스트 프로세스면 SIGTERM 후 같은 명령으로 다시 띄운다(출력 `fleet/logs/collector_restarted.log`). 컨테이너(`--profile collector`)면 docker stop/start.
+
+## 7. 표③ 만들기
+```bash
+python3 scripts/make_table3.py --minutes 10 --label "가상 50대 1 Hz" --out docs/measurements/table3.md
+cat docs/measurements/table3.md     # ③-1 처리량·전달 지연·유실, ③-2 장애 주입, ③-3 OTA
 ```
 
-## 7. RT 노드를 51번째 장치로 (ROS 2 환경 터미널)
+## 8. 진단 (D2 에서 본 이상 두 가지)
+```bash
+python3 fleet/tools/diag.py --minutes 15     # A) offline 이벤트 분류(진짜 끊김/가짜/정상 종료) B) 전달 지연 튐 간격 → keepalive 가설 등
+python3 fleet/agent/virtual_fleet.py --count 50 --keepalive 30    # 튐 간격이 10초 → 30초로 바뀌면 keepalive(PINGREQ) 가설 확정
+```
+
+## 9. RT 노드를 51번째 장치로 (ROS 2 환경 터미널)
 ```bash
 source /opt/ros/jazzy/setup.bash && source install/setup.bash && source .venv/bin/activate
-python3 fleet/agent/ros_status_bridge.py --device-id rt-node-1     # rt_control_node 가 떠 있어야 함
+python3 fleet/agent/ros_status_bridge.py --device-id rt-node-1     # rt_control_node 가 떠 있어야 함. state 에 READY/RUNNING/FAULT 가 올라간다
 ```
+
+## 10. 통합 테스트 한 번에 (CI 2단계와 같은 스크립트, 약 4분)
+```bash
+bash fleet/tests/integration.sh      # mqtt·db 컨테이너 → 수집기(qos 1) + 가상 10대 → 장애 3종 + 롤백 + 정상 OTA → 판정 → build/integration/table3_ci.md
+```
+(기존 수집기·가상 장치가 떠 있으면 먼저 끈다. 컨테이너는 끝나도 그대로 둔다. `KEEP=0` 이면 내린다)
 
 ## 끄기
 ```bash
 docker compose -f fleet/docker-compose.yml down        # 데이터 유지
-docker compose -f fleet/docker-compose.yml down -v     # 데이터까지 삭제
+docker compose -f fleet/docker-compose.yml down -v     # 데이터까지 삭제 (init.sql 이 다시 돌아 새 표가 다 생긴다)
 ```
