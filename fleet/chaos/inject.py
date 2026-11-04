@@ -116,11 +116,17 @@ class Db:
 
 
 def measure_loss(db, t_from, t_to):
-    """[t_from, t_to] 창에서 장치별 seq 범위 vs 받은 행 수 → dict(expected, received, lost, devices)"""
+    """[t_from, t_to] 창의 유실 = 장치별로 (창 안 마지막 seq − 창 직전 마지막 seq) − 받은 행 수.
+    왜 "창 직전 seq" 에 고정하나: 창 안의 min(seq) 를 기준으로 하면, 장애 시작 직후에 잃은 메시지(= 창의 앞 가장자리)가
+    기준점 뒤로 숨어 유실 0 으로 보인다 (11/04 실측에서 2대 × 12개를 놓칠 뻔함). 직전 30초 안에 데이터가 없는 장치는 min(seq) 로."""
     rows = db.query("""
-        SELECT count(*) AS devices, coalesce(sum(received), 0), coalesce(sum(expected), 0)
-        FROM (SELECT device_id, count(*) AS received, max(seq) - min(seq) + 1 AS expected
-              FROM telemetry WHERE time >= %s AND time <= %s GROUP BY device_id) t""", (t_from, t_to))
+        WITH w AS (SELECT device_id, count(*) AS received, max(seq) AS max_seq, min(seq) AS min_seq
+                   FROM telemetry WHERE time >= %s AND time <= %s GROUP BY device_id),
+             b AS (SELECT device_id, max(seq) AS prev_seq
+                   FROM telemetry WHERE time >= %s - interval '30 seconds' AND time < %s GROUP BY device_id)
+        SELECT count(*), coalesce(sum(w.received), 0),
+               coalesce(sum(w.max_seq - coalesce(b.prev_seq, w.min_seq - 1)), 0)
+        FROM w LEFT JOIN b USING (device_id)""", (t_from, t_to, t_from, t_from))
     if not rows:
         return {"expected": None, "received": None, "lost": None, "devices": None}
     devices, received, expected = rows[0]
@@ -380,7 +386,7 @@ def run_fault_collector(db, a):
         "baseline_devices": devices0, "baseline_rate": round(rate0, 1), "detect_s": None,
         "recover_first_stats_s": seconds_between(t_first, t_restore),
         "recover_all_devices_s": seconds_between(t_all, t_restore),
-        "loss": loss, "loss_if_no_protection": int(round(devices0 * rate0 * a.duration)),
+        "loss": loss, "loss_if_no_protection": int(round(rate0 * a.duration)),   # rate0 는 이미 전체 장치 합(msgs/s)
         "t_inject": t_inject.isoformat(), "t_restore": t_restore.isoformat(),
     }
 

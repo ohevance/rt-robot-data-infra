@@ -53,9 +53,10 @@ def section_throughput(dsn, minutes, label):
         FROM (SELECT device_id, count(*) AS received, max(seq) - min(seq) + 1 AS expected
               FROM telemetry WHERE time > {window} GROUP BY device_id) t""")
     devices, received, expected = cur.fetchone()
+    # sum() 결과는 Decimal 로 온다 → float 로 바꿔 계산 (float * Decimal 은 TypeError)
     loss_pct = 0.0
     if expected:
-        loss_pct = 100.0 * (expected - received) / expected
+        loss_pct = 100.0 * (float(expected) - float(received)) / float(expected)
 
     cur.execute(f"SELECT kind, count(*) FROM events WHERE time > {window} GROUP BY kind ORDER BY kind")
     events = cur.fetchall()
@@ -122,14 +123,14 @@ def section_faults(measure_dir):
         if name.startswith("collector"):
             note = "QoS 0 은 유실, QoS 1 지속 세션은 0 이어야 함"
         no_protect = r.get("loss_if_no_protection")
-        if no_protect is None and r.get("baseline_rate") is not None and r.get("duration_s") is not None:
-            no_protect = int(round(r["baseline_rate"] * r["duration_s"]))
+        if r.get("baseline_rate") is not None and r.get("duration_s") is not None:
+            no_protect = int(round(r["baseline_rate"] * r["duration_s"]))   # 전체 초당 메시지 × 멈춘 시간 (JSON 값보다 이 계산을 우선: 옛 JSON 의 계산 오류 보정)
         lines.append(f"| {name} | {r['method']} | {f(r.get('duration_s'), 0)}초 | {sec(r.get('detect_s'))} | "
                      f"{sec(first)} | {sec(full)} | {lost if lost is not None else '-'} / {loss.get('expected', '-')} | "
                      f"{no_protect if no_protect is not None else '-'} | {note} |")
     lines.append("")
     lines.append("- 감지 = 주입 → 수집기 통계(msgs/s=0)나 DB 프로브가 이상을 처음 본 때. 복구 = 복구 명령 → DB 에 그 사실이 찍힌 때 (±1초, 1초 묶음 적재).")
-    lines.append("- 유실 행 = 장치별 일련번호 범위 − 받은 행 (주입 시각부터 집계까지). '보호 없었다면' = 장치 수 × 초당 메시지 × 멈춘 시간.")
+    lines.append("- 유실 행 = 장애 직전 마지막 일련번호부터 집계 시각까지 장치가 만든 메시지 수 − 실제 받은 행. '보호 없었다면' = 전체 초당 메시지 × 멈춘 시간.")
     return lines
 
 
