@@ -7,6 +7,7 @@
   3) DeviceAgent 의 명령: ping · health · ota(정상/나쁜 펌웨어) · ota_rollback
   4) Collector.flush_once(dry-run): 메시지 수·온라인 수·지연 통계가 맞게 나온다
   5) 유언(LWT): 에이전트가 갑자기 죽으면 브로커가 offline 을 발행하고 수집기가 그것을 이벤트로 받는다
+  6) 보관(retained) 상태는 이벤트가 아니다 · 수집기 단일 인스턴스 잠금
 
 실행:  python3 fleet/tests/test_fleet_logic.py
 """
@@ -25,7 +26,7 @@ BROKER = fake_mqtt.BROKER
 sys.path.insert(0, os.path.join(HERE, "..", "agent"))
 sys.path.insert(0, os.path.join(HERE, "..", "collector"))
 from device_agent import DeviceAgent  # noqa: E402
-from collector import Collector, parse_telemetry  # noqa: E402
+from collector import Collector, parse_telemetry, acquire_single_instance_lock  # noqa: E402
 
 fail_count = 0
 
@@ -179,12 +180,28 @@ def test_lwt_reaches_collector():
     check(len(c.pending_status) == 2 and c.pending_status[1][1] == "offline", "비정상 종료 → 브로커의 유언 offline 이 도착")
 
 
+def test_retained_status_and_lock():
+    BROKER.reset()
+    BROKER.publish("fleet/old/status", b"offline", 1, True)   # 과거에 남은 보관 값
+    c = Collector("localhost", 1883, "postgresql://x", dry_run=True)   # 구독하면 보관 값이 retain=1 로 내려온다
+    check(c.retained_status_skipped == 1 and len(c.pending_status) == 0, "구독 때 내려온 보관 상태는 이벤트로 적지 않는다")
+    BROKER.publish("fleet/old/status", b"online", 1, True)    # 지금 일어난 변화 (전달은 retain=0)
+    check(len(c.pending_status) == 1 and c.pending_status[0][1] == "online", "살아 있는 상태 변화는 이벤트로 적는다")
+
+    first = acquire_single_instance_lock()
+    check(first is not None, "첫 수집기는 잠금을 잡는다")
+    second = acquire_single_instance_lock()
+    check(second is None, "두 번째 수집기는 잠금을 못 잡고 물러난다 (같은 client_id 충돌 방지)")
+    first.close()
+
+
 if __name__ == "__main__":
     test_parse()
     test_store_and_forward()
     test_commands_and_ota()
     test_collector_dry_run()
     test_lwt_reaches_collector()
+    test_retained_status_and_lock()
     if fail_count == 0:
         print("OK: fleet logic")
         sys.exit(0)

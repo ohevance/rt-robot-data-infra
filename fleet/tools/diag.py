@@ -79,21 +79,30 @@ def section_offline_events(cur, window, lines):
     report_offline_clusters(offline, clustered, lines)
 
 
-def find_clusters(offline):
-    """0.5초 안에 CLUSTER_MIN 개 이상 몰린 offline 의 인덱스 집합"""
+def find_cluster_groups(offline):
+    """군집 = 첫 이벤트부터 0.5초 안에 들어온 offline 들 (CLUSTER_MIN 개 이상). 인덱스 목록의 목록.
+    (이전 이벤트 기준으로 이어 붙이면 1초마다 오는 이벤트가 하나의 거대 군집으로 뭉쳐 버린다 → 첫 이벤트 기준)"""
     groups = []
     current = [0]
     for i in range(1, len(offline)):
-        if (offline[i][0] - offline[current[-1]][0]).total_seconds() <= CLUSTER_WINDOW_S:
+        if (offline[i][0] - offline[current[0]][0]).total_seconds() <= CLUSTER_WINDOW_S:
             current.append(i)
         else:
             groups.append(current)
             current = [i]
     groups.append(current)
-    clustered = set()
+    result = []
     for group in groups:
         if len(group) >= CLUSTER_MIN:
-            clustered.update(group)
+            result.append(group)
+    return result
+
+
+def find_clusters(offline):
+    """군집에 속한 offline 의 인덱스 집합"""
+    clustered = set()
+    for group in find_cluster_groups(offline):
+        clustered.update(group)
     return clustered
 
 
@@ -127,19 +136,22 @@ def classify_offline_events(offline, clustered, lines):
 
 
 def report_offline_clusters(offline, clustered, lines):
-    if len(clustered) == 0:
+    groups = find_cluster_groups(offline)
+    if len(groups) == 0:
         return
-    items = [offline[i] for i in sorted(clustered)]
-    span_ms = (items[-1][0] - items[0][0]).total_seconds() * 1000.0
-    devices = [r[1] for r in items]
-    shown = ", ".join(devices[:8])
-    more = ""
-    if len(devices) > 8:
-        more = f" ... (+{len(devices) - 8})"
     lines.append("")
-    lines.append(f"offline 군집: {items[0][0].strftime('%H:%M:%S.%f')[:-3]} 부터 {span_ms:.0f} ms 안에 {len(items)}대: {shown}{more}")
-    lines.append("  → Mosquitto 는 종료될 때 접속 중인 클라이언트의 유언을 한꺼번에 발행한다. 장치 번호가 앞쪽(접속 순서)인 것은 "
-                 "소켓을 닫기 전에 앞에서부터 쓰다가 끊겼다는 뜻. 대시보드의 '오프라인 이벤트' 는 이 경우를 빼고 세는 것이 맞다.")
+    lines.append("offline 군집 (첫 이벤트부터 0.5초 안):")
+    for group in groups:
+        items = [offline[i] for i in group]
+        span_ms = (items[-1][0] - items[0][0]).total_seconds() * 1000.0
+        devices = [r[1] for r in items]
+        shown = ", ".join(devices[:6])
+        more = ""
+        if len(devices) > 6:
+            more = f" ... (+{len(devices) - 6})"
+        lines.append(f"- {items[0][0].strftime('%H:%M:%S.%f')[:-3]} 부터 {span_ms:.0f} ms 안에 {len(items)}대: {shown}{more}")
+    lines.append("  → Mosquitto 는 종료될 때 접속 중인 클라이언트의 유언을 한꺼번에 발행한다 (브로커 stop 시각과 맞으면 그것). "
+                 "수십 대가 같은 초에 끊긴 다른 경우는 네트워크 장애. 대시보드의 '오프라인 이벤트' 는 이 경우를 빼고 세는 것이 맞다.")
 
 
 # ---------------------------------------------------------------------------

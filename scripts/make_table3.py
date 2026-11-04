@@ -94,18 +94,19 @@ def section_faults(measure_dir):
         return []
     faults.sort(key=fault_sort_key)
     lines = ["", "### 표③-2 장애 주입 → 감지·복구·유실", ""]
-    lines.append("| 장애 | 주입 방법 | 멈춘 시간 | 감지 | 복구(첫 데이터) | 복구(전 장치/backlog 0) | 유실 행 | 보호 없었다면 | 비고 |")
-    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---|")
+    lines.append("| 장애 | 주입 방법 | 멈춘 시간 | 감지 | 복구(첫 데이터) | 복구(전 장치/backlog 0) | 유실 행 | 보호 없었다면 | 비고 | 측정 |")
+    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---|---|")
     for r in faults:
         name = r["fault"]
         if r.get("label"):
             name = f"{name} ({r['label']})"
+        when = (r.get("measured_at") or "")[:16].replace("T", " ")   # 재측정을 구분하기 위해 (UTC)
         loss = r.get("loss") or {}
         lost = loss.get("lost")
         if name.startswith("bad_firmware"):
             lines.append(f"| {name} | {r['method']} | - | - | - | 롤백 {sec(r.get('rollback_s'))} | "
                          f"나쁜 버전 닿은 장치 {r.get('devices_touched')}/{r.get('devices_total')} | "
-                         f"{r.get('devices_total')}대 전부 | 5% 단계 헬스 게이트 |")
+                         f"{r.get('devices_total')}대 전부 | 5% 단계 헬스 게이트 | {when} |")
             continue
         first = r.get("recover_first_msg_s")
         if first is None:
@@ -127,9 +128,9 @@ def section_faults(measure_dir):
             no_protect = int(round(r["baseline_rate"] * r["duration_s"]))   # 전체 초당 메시지 × 멈춘 시간 (JSON 값보다 이 계산을 우선: 옛 JSON 의 계산 오류 보정)
         lines.append(f"| {name} | {r['method']} | {f(r.get('duration_s'), 0)}초 | {sec(r.get('detect_s'))} | "
                      f"{sec(first)} | {sec(full)} | {lost if lost is not None else '-'} / {loss.get('expected', '-')} | "
-                     f"{no_protect if no_protect is not None else '-'} | {note} |")
+                     f"{no_protect if no_protect is not None else '-'} | {note} | {when} |")
     lines.append("")
-    lines.append("- 감지 = 주입 → 수집기 통계(msgs/s=0)나 DB 프로브가 이상을 처음 본 때. 복구 = 복구 명령 → DB 에 그 사실이 찍힌 때 (±1초, 1초 묶음 적재).")
+    lines.append("- 감지 = 주입 → 수집기 통계(msgs/s=0)나 DB 프로브가 이상을 처음 본 때. 복구 = 복구 명령 → DB 에 그 사실이 찍힌 때 (±1초, 1초 묶음 적재). 측정 = UTC.")
     lines.append("- 유실 행 = 장애 직전 마지막 일련번호부터 집계 시각까지 장치가 만든 메시지 수 − 실제 받은 행. '보호 없었다면' = 전체 초당 메시지 × 멈춘 시간.")
     return lines
 

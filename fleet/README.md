@@ -83,6 +83,8 @@ python3 fleet/chaos/assert_results.py docs/measurements/fault_*.json   # 기대�
 각 장애마다 기준선(장치 수·msgs/s) → 주입 → 감지 시각 → 복구 시각 → 15초 뒤 유실(장애 직전 seq 기준) 계산 → `docs/measurements/fault_<fault>.json`.
 브로커 설정을 바꾼 뒤(persistence 등)에는 `docker compose -f fleet/docker-compose.yml up -d mqtt` 로 컨테이너를 다시 만들어야 적용된다.
 `collector` 장애는 수집기가 호스트 프로세스면 SIGTERM 후 같은 명령으로 다시 띄운다(출력 `fleet/logs/collector_restarted.log`). 컨테이너(`--profile collector`)면 docker stop/start.
+재시작된 수집기는 터미널이 아니라 배경에서 돈다. 다시 터미널에서 보고 싶으면 `kill -TERM $(cat fleet/logs/collector.lock)` 으로 곱게 끝낸 뒤(마지막 적재 후 종료) 터미널 2 에서 다시 띄운다.
+**수집기는 한 번에 하나만** — 둘이 뜨면 같은 client_id 를 서로 밀어내 2초마다 재접속한다. 두 번째는 잠금 파일을 보고 스스로 물러난다.
 
 ## 7. 표③ 만들기
 ```bash

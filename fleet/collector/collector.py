@@ -19,6 +19,14 @@ DB 가 죽어도 데이터를 잃지 않는다 (D4, 장애 주입 --fault db)
   왜: 11/04 실측에서 SIGTERM 즉시 종료 → 그 1초 동안 받아 둔 행(장치당 1개, 50개)이 사라졌다. QoS 1 의 확인(PUBACK)은 paho 가
   받는 즉시 보내므로 "받았다 ≠저장했다" — 종료 때만이라도 그 틈을 메운다. (완전한 해법은 DB 적재 뒤 수동 ACK: 2주 계획 밖)
 
+수집기는 한 번에 하나만 (11/04 실측에서 추가)
+  client_id "collector" 가 고정이라 두 개가 뜨면 브로커가 번갈아 끊는다(같은 ID 의 새 접속이 옛 접속을 밀어냄 → 2초마다 재접속, 메시지 반반).
+  시작할 때 fleet/logs/collector.lock 을 flock 으로 잡고, 이미 잡혀 있으면 그 pid 를 알려 주고 종료한다. (프로세스가 죽으면 잠금은 자동 해제)
+
+보관(retained) 상태 메시지는 "이벤트"가 아니다
+  구독할 때 브로커가 넘겨 주는 fleet/<id>/status 의 보관 값(retain=1)은 "지금 상태"이지 "방금 일어난 일"이 아니다 → events 에 넣지 않는다.
+  (persistence true 뒤로 브로커 재시작 때마다 유언 offline 이 보관돼 다시 내려와 오프라인 이벤트가 두 배로 세졌다)
+
 수집기가 죽어도 데이터를 잃지 않으려면 (장애 주입 --fault collector)
   --qos 1 로 띄우면 "지속 세션"(clean_session=False, 고정 client_id)으로 구독한다. 수집기가 없는 동안 브로커가
   QoS 1 메시지를 대신 들고 있다가 다시 붙으면 넘겨 준다. 단, 장치도 QoS 1 로 보내야 한다 (virtual_fleet --telemetry-qos 1).
@@ -31,12 +39,17 @@ DB 가 죽어도 데이터를 잃지 않는다 (D4, 장애 주입 --fault db)
   python3 fleet/collector/collector.py --dry-run      # DB 없이 통계만 출력 (브로커는 필요)
 """
 import argparse
+import fcntl
 import json
+import os
 import signal
 import sys
 import threading
 import time
 from datetime import datetime, timezone
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+LOCK_PATH = os.path.join(HERE, "..", "logs", "collector.lock")
 
 import paho.mqtt.client as mqtt
 
@@ -109,6 +122,7 @@ class Collector:
         self.fw_of = {}               # device_id -> fw_version
         self.state_of = {}            # device_id -> state
         self.dropped_bad = 0
+        self.retained_status_skipped = 0   # 구독 때 내려온 보관 상태 메시지 (이벤트로 안 적은 수)
         self.backlog = []             # DB 에 못 넣은 Batch 들 (오래된 것이 앞)
         self.backlog_rows = 0
         self.backlog_dropped = 0      # 상한을 넘어 버린 행 수
@@ -140,6 +154,10 @@ class Collector:
         device_id = parts[1]
         kind = parts[2]
         if kind == "status":
+            if msg.retain:
+                # 보관 값 = 과거의 마지막 상태. 지금 일어난 일이 아니므로 이벤트로 적지 않는다
+                self.retained_status_skipped += 1
+                return
             status = msg.payload.decode("utf-8", errors="replace")
             with self.lock:
                 self.pending_status.append((device_id, status, datetime.now(timezone.utc)))
@@ -296,6 +314,26 @@ class Collector:
 STOP = {"requested": False}   # 종료 신호를 받으면 True (시그널 핸들러는 이 플래그만 세운다)
 
 
+def acquire_single_instance_lock():
+    """fleet/logs/collector.lock 을 잠근다. 이미 다른 수집기가 잡고 있으면 None (그 pid 는 파일 안에 적혀 있다)"""
+    os.makedirs(os.path.dirname(LOCK_PATH), exist_ok=True)
+    lock_file = open(LOCK_PATH, "a+")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lock_file.seek(0)
+        other = lock_file.read().strip()
+        lock_file.close()
+        print(f"collector: 이미 수집기가 떠 있습니다 (pid {other or '?'}). client_id 가 같아 둘이 서로 끊으므로 하나만 둡니다.\n"
+              f"          기존 것을 끝내려면:  kill -TERM {other or '<pid>'}   (곱게 종료 → 마지막 적재 후 끝남)")
+        return None
+    lock_file.seek(0)
+    lock_file.truncate()
+    lock_file.write(str(os.getpid()))
+    lock_file.flush()
+    return lock_file   # 열어 둔 채로 들고 있어야 잠금이 유지된다
+
+
 def request_stop(signum, frame):
     STOP["requested"] = True
 
@@ -323,6 +361,9 @@ def main():
     ap.add_argument("--qos", type=int, default=0, choices=[0, 1], help="텔레메트리 구독 QoS. 1 = 지속 세션(수집기 끊김 시 유실 0)")
     a = ap.parse_args()
 
+    lock_file = acquire_single_instance_lock()
+    if lock_file is None:
+        return 3
     c = Collector(a.broker, a.port, a.db, a.dry_run, qos=a.qos)
     if not a.dry_run:
         try:
