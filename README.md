@@ -4,7 +4,7 @@
 ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 / MuJoCo / CI — 휴머노이드 로봇 회사의
 "실시간 제어 및 데이터 인프라" 직무를 겨냥해 2026년 11월에 만들고 있다. (작업 중)
 
-![ci](https://github.com/<아이디>/rt-robot-data-infra/actions/workflows/ci.yml/badge.svg)
+![ci](https://github.com/ohevance/rt-robot-data-infra/actions/workflows/ci.yml/badge.svg)
 
 | 직무 요구 | 산출물 | 수치 | 상태 |
 |---|---|---|---|
