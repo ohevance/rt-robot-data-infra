@@ -63,7 +63,7 @@ def build():
         stat_panel(4, "DB 적재 시간 (ms, 최근 1초)",
                    "SELECT insert_ms FROM collector_stats ORDER BY time DESC LIMIT 1",
                    12, 0, 4, 4, unit="ms"),
-        stat_panel(5, "오프라인 이벤트 (최근 10분)",
+        stat_panel(5, "오프라인 이벤트 (최근 10분, 브로커 종료 유언 포함)",
                    "SELECT count(*) AS offline FROM events WHERE kind = 'offline' AND time > now() - interval '10 minutes'",
                    16, 0, 4, 4),
         stat_panel(6, "멈춤·고장 장치 (tripped/fault/updating)",

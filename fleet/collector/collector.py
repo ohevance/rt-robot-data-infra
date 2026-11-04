@@ -14,12 +14,17 @@ DB 가 죽어도 데이터를 잃지 않는다 (D4, 장애 주입 --fault db)
   1초 묶음을 바로 못 넣으면 backlog(메모리)에 쌓아 두고 매초 다시 시도한다. DB 가 돌아오면 오래된 것부터 모두 넣는다.
   상한 MAX_BACKLOG_ROWS 를 넘으면 가장 오래된 묶음을 버리고 센다(backlog_dropped). 통계에 backlog_rows, db_errors 로 보인다.
 
+종료 신호(SIGTERM·Ctrl+C)를 받으면 "곱게" 끝난다 (D5 실측에서 고침)
+  먼저 브로커 수신을 멈추고(지속 세션이면 그 뒤 메시지는 브로커가 보관), 아직 DB 에 안 넣은 pending·backlog 를 마지막으로 적재한 뒤 끝낸다.
+  왜: 11/04 실측에서 SIGTERM 즉시 종료 → 그 1초 동안 받아 둔 행(장치당 1개, 50개)이 사라졌다. QoS 1 의 확인(PUBACK)은 paho 가
+  받는 즉시 보내므로 "받았다 ≠저장했다" — 종료 때만이라도 그 틈을 메운다. (완전한 해법은 DB 적재 뒤 수동 ACK: 2주 계획 밖)
+
 수집기가 죽어도 데이터를 잃지 않으려면 (장애 주입 --fault collector)
   --qos 1 로 띄우면 "지속 세션"(clean_session=False, 고정 client_id)으로 구독한다. 수집기가 없는 동안 브로커가
   QoS 1 메시지를 대신 들고 있다가 다시 붙으면 넘겨 준다. 단, 장치도 QoS 1 로 보내야 한다 (virtual_fleet --telemetry-qos 1).
   QoS 0(기본)이면 수집기가 죽은 동안의 메시지는 유실된다 — 그 차이를 표③에 숫자로 남긴다.
 
-읽는 순서: parse_telemetry → Collector.on_message → Collector.flush_once → drain_backlog → write_db → main
+읽는 순서: parse_telemetry → Collector.on_message → Collector.flush_once → drain_backlog → write_db → main → shutdown
 사용:
   python3 fleet/collector/collector.py                # localhost 브로커·DB, QoS 0
   python3 fleet/collector/collector.py --qos 1        # 지속 세션 (수집기 끊김 시 유실 0)
@@ -27,6 +32,7 @@ DB 가 죽어도 데이터를 잃지 않는다 (D4, 장애 주입 --fault db)
 """
 import argparse
 import json
+import signal
 import sys
 import threading
 import time
@@ -287,6 +293,26 @@ class Collector:
             self.drop_db_connection()
 
 
+STOP = {"requested": False}   # 종료 신호를 받으면 True (시그널 핸들러는 이 플래그만 세운다)
+
+
+def request_stop(signum, frame):
+    STOP["requested"] = True
+
+
+def shutdown(c):
+    """곱게 끝내기: 수신 중단 → 남은 pending·backlog 마지막 적재 → 결과 출력"""
+    c.client.loop_stop()
+    c.client.disconnect()
+    if c.dry_run:
+        return
+    last = c.flush_once()
+    if c.backlog_rows > 0:
+        print(f"collector: 종료 시 DB 에 못 넣은 행 {c.backlog_rows}개 (버린 행 {c.backlog_dropped}개) — DB 가 죽어 있음")
+    else:
+        print(f"collector: 종료 — 마지막 {last['msgs']}행까지 적재 완료, 남은 backlog 0")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--broker", default="localhost")
@@ -305,25 +331,21 @@ def main():
         except Exception as e:
             print(f"collector: DB 에 아직 못 붙음 ({e.__class__.__name__}) — 돌면서 매초 다시 시도합니다")
             c.drop_db_connection()
+    signal.signal(signal.SIGTERM, request_stop)   # kill / 장애 주입 → 플래그만 세우고, 루프가 끝나면 shutdown 이 마지막 적재
+    signal.signal(signal.SIGINT, request_stop)    # Ctrl+C 도 같은 길
     c.client.loop_start()
     print("collector: running (Ctrl+C to stop)")
-    try:
-        next_tick = time.monotonic() + a.interval
-        while True:
-            delay = next_tick - time.monotonic()
-            if delay > 0:
-                time.sleep(delay)
-            next_tick += a.interval
-            s = c.flush_once()
-            print("msgs/s={msgs:>5}  online={online:>4}  insert={insert_ms:>7} ms  transit ms p50={lat_p50} p95={lat_p95} max={lat_max}"
-                  "  bad={bad}  backlog={backlog_rows}  db_err={db_errors}".format(**s))
-    except KeyboardInterrupt:
-        pass
-    finally:
-        c.client.loop_stop()
-        c.client.disconnect()
-        if c.backlog_rows > 0:
-            print(f"collector: 종료 시 DB 에 못 넣은 행 {c.backlog_rows}개 (버린 행 {c.backlog_dropped}개)")
+    next_tick = time.monotonic() + a.interval
+    while not STOP["requested"]:
+        delay = next_tick - time.monotonic()
+        if delay > 0:
+            time.sleep(min(delay, 0.2))   # 0.2초씩 자야 종료 신호에 바로 깬다
+            continue
+        next_tick += a.interval
+        s = c.flush_once()
+        print("msgs/s={msgs:>5}  online={online:>4}  insert={insert_ms:>7} ms  transit ms p50={lat_p50} p95={lat_p95} max={lat_max}"
+              "  bad={bad}  backlog={backlog_rows}  db_err={db_errors}".format(**s), flush=True)
+    shutdown(c)
     return 0
 
 

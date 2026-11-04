@@ -185,7 +185,7 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "오프라인 이벤트 (최근 10분)",
+      "title": "오프라인 이벤트 (최근 10분, 브로커 종료 유언 포함)",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "timescale"

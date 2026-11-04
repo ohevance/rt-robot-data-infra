@@ -17,6 +17,7 @@ services:
       - "1883:1883"
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - fleet_mqtt_data:/mosquitto/data            # persistence true 가 쓰는 곳 (세션·보관 메시지가 재시작을 넘긴다)
 
   db:
     image: timescale/timescaledb:latest-pg16
@@ -64,3 +65,4 @@ services:
 
 volumes:
   fleet_db_data: {}
+  fleet_mqtt_data: {}

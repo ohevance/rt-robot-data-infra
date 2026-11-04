@@ -80,7 +80,8 @@ python3 fleet/chaos/inject.py --fault collector --duration 10 --label qos1   # �
 python3 fleet/chaos/inject.py --fault bad_firmware                  # 나쁜 펌웨어 → 5% 에서 롤백
 python3 fleet/chaos/assert_results.py docs/measurements/fault_*.json   # 기대대로였나 판정
 ```
-각 장애마다 기준선(장치 수·msgs/s) → 주입 → 감지 시각 → 복구 시각 → 15초 뒤 유실(seq 빈칸) 계산 → `docs/measurements/fault_<fault>.json`.
+각 장애마다 기준선(장치 수·msgs/s) → 주입 → 감지 시각 → 복구 시각 → 15초 뒤 유실(장애 직전 seq 기준) 계산 → `docs/measurements/fault_<fault>.json`.
+브로커 설정을 바꾼 뒤(persistence 등)에는 `docker compose -f fleet/docker-compose.yml up -d mqtt` 로 컨테이너를 다시 만들어야 적용된다.
 `collector` 장애는 수집기가 호스트 프로세스면 SIGTERM 후 같은 명령으로 다시 띄운다(출력 `fleet/logs/collector_restarted.log`). 컨테이너(`--profile collector`)면 docker stop/start.
 
 ## 7. 표③ 만들기

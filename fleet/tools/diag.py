@@ -225,24 +225,48 @@ def section_seq_gaps(cur, window, lines):
     lost_total = 0
     stalled = 0
     reordered = 0
-    lines.append("")
-    lines.append("| 장치 | 틈 시작 | 틈 끝 | 공백(초) | seq 이전→이후 | 판정 |")
-    lines.append("|---|---|---|---:|---|---|")
+    groups = {}   # (틈 시작 초, 판정 종류) -> [장치, 유실 수, 공백]
+    details = []
     for device_id, when, seq, prev_seq, prev_time in rows:
         gap_s = (when - prev_time).total_seconds()
         missing = seq - prev_seq - 1
         if missing > 0:
-            verdict = f"유실 {missing}개"
+            kind = "유실"
             lost_total += missing
         elif missing == 0:
-            verdict = "장치 멈춤 (유실 없음 — seq 연속)"
+            kind = "장치 멈춤 (seq 연속)"
             stalled += 1
         else:
-            verdict = "순서 뒤바뀜/재시작"
+            kind = "순서 뒤바뀜/재시작"
             reordered += 1
-        lines.append(f"| {device_id} | {prev_time.strftime('%H:%M:%S.%f')[:-3]} | {when.strftime('%H:%M:%S.%f')[:-3]} | {gap_s:.1f} | {prev_seq}→{seq} | {verdict} |")
+        key = (prev_time.strftime("%H:%M:%S"), kind)
+        if key not in groups:
+            groups[key] = []
+        groups[key].append((device_id, missing, gap_s))
+        details.append((device_id, prev_time, when, gap_s, prev_seq, seq, kind, missing))
+    # 요약: 같은 초에 시작한 틈을 한 줄로 (장애 하나가 50대에 같은 틈을 내면 50줄 대신 1줄)
     lines.append("")
-    lines.append(f"- 합계: 유실 {lost_total}개, 장치 멈춤 {stalled}건, 순서 이상 {reordered}건")
+    lines.append("| 틈 시작(초) | 종류 | 장치 수 | 장치당 유실 | 합계 | 공백(초) | 장치 예 |")
+    lines.append("|---|---|---:|---|---:|---:|---|")
+    for (start, kind), items in sorted(groups.items()):
+        per = sorted(set(it[1] for it in items))
+        per_text = str(per[0])
+        if len(per) > 1:
+            per_text = f"{per[0]}~{per[-1]}"
+        total = sum(max(it[1], 0) for it in items)
+        gap = max(it[2] for it in items)
+        examples = ", ".join(it[0] for it in items[:3])
+        lines.append(f"| {start} | {kind} | {len(items)} | {per_text} | {total} | {gap:.1f} | {examples} |")
+    lines.append("")
+    lines.append(f"- 합계: 유실 {lost_total}개, 장치 멈춤 {stalled}건, 순서 이상 {reordered}건 (상세는 앞 20건만 아래)")
+    lines.append("")
+    lines.append("| 장치 | 틈 시작 | 틈 끝 | 공백(초) | seq 이전→이후 | 판정 |")
+    lines.append("|---|---|---|---:|---|---|")
+    for device_id, prev_time, when, gap_s, prev_seq, seq, kind, missing in details[:20]:
+        verdict = kind
+        if missing > 0:
+            verdict = f"유실 {missing}개"
+        lines.append(f"| {device_id} | {prev_time.strftime('%H:%M:%S.%f')[:-3]} | {when.strftime('%H:%M:%S.%f')[:-3]} | {gap_s:.1f} | {prev_seq}→{seq} | {verdict} |")
     lines.append("- '장치 멈춤' 은 가상 장치 스레드가 그 시간 동안 tick 을 못 돈 것(파이썬 GIL·paho 재접속 대기 등). 실물이면 장치 쪽 로그를 본다.")
     lines.append("- '유실' 은 메시지가 영영 안 온 것. 어느 장애 시각과 겹치는지 A/B 와 대조한다.")
 

@@ -8,6 +8,7 @@
   4) 상한: MAX_BACKLOG_ROWS 를 넘으면 가장 오래된 묶음을 버리고 backlog_dropped 로 센다
   5) --qos 1 이면 지속 세션(clean_session=False)으로 붙고 telemetry 를 QoS 1 로 구독한다
   6) 옛 스키마(003 미적용)면 check_schema 가 False 를 돌려준다 (안내 후 종료용)
+  7) 종료(SIGTERM/Ctrl+C) 때 아직 묶지 않은 pending 행을 마지막으로 적재한다 (11/04 실측에서 잃었던 "마지막 1초")
 
 실행:  python3 fleet/tests/test_collector_resilience.py
 """
@@ -117,6 +118,19 @@ def test_persistent_session_option():
     check(("fleet/+/telemetry", 1) in c1.client.subscriptions, "qos 1 로 구독")
 
 
+def test_shutdown_flushes_pending():
+    BROKER.reset()
+    fake_psycopg.reset()
+    c = Collector("localhost", 1883, "postgresql://fake", dry_run=False)
+    c.check_schema()
+    publish_telemetry("z", 0)
+    publish_telemetry("z", 1)
+    check(len(fake_psycopg.STORE["telemetry"]) == 0, "아직 flush 전: DB 에 0행 (pending 에 2행)")
+    collector.shutdown(c)
+    check(seqs_in_store() == [0, 1], "shutdown 이 pending 2행을 마지막으로 적재한다")
+    check(c.client.connected is False, "shutdown 뒤 브로커 연결은 끊겨 있다 (지속 세션이면 그 뒤는 브로커가 보관)")
+
+
 def test_old_schema_detected():
     BROKER.reset()
     fake_psycopg.reset()
@@ -129,6 +143,7 @@ if __name__ == "__main__":
     test_db_outage_and_recovery()
     test_backlog_limit()
     test_persistent_session_option()
+    test_shutdown_flushes_pending()
     test_old_schema_detected()
     if fail_count == 0:
         print("OK: collector resilience")
