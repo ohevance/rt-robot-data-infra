@@ -71,3 +71,10 @@
 - 증상(새 발견): persistence true 뒤로 브로커 재시작 때 offline 이벤트가 20 + 50 으로 늘어남. 원인: 종료 때 발행된 유언 "offline" 이 **보관(retained)** 되어 재시작 뒤 수집기가 구독하는 순간 50개가 다시 내려옴(retain=1). 해결: retain=1 로 받은 상태 메시지는 "지금 상태"이지 "사건"이 아니므로 events 에 넣지 않는다(카운터만). 대시보드 오프라인 수가 뜻대로 돌아온다.
 - diag A 군집 판정 수정: 이전 이벤트 기준으로 이어 붙여 1초 간격 이벤트가 하나의 거대 군집(209대)으로 뭉쳤다 → 첫 이벤트 기준 0.5초로 끊고 군집마다 한 줄.
 - 남은 미확정: 10초 튐(keepalive 가설) — 이번 창은 잡음(재접속 싸움)이 섞여 판정 보류. `--keepalive 30` 실험은 다음 실측.
+
+## 2026-11-04 (GitHub 첫 push · CI 1차)
+- 저장소 공개: https://github.com/ohevance/rt-robot-data-infra (커밋 D0→D5 + 실측 2회). CI 1단계(rt_core) 통과, 2단계 `fleet_integration` 실패.
+- 증상: 컨테이너 안 `pg_isready` 가 "accepting connections" 라고 한 1초 뒤 `migrate.py` 가 "server closed the connection unexpectedly".
+- 원인: TimescaleDB(Postgres) 이미지는 첫 기동 때 **임시 서버(유닉스 소켓만)로 init.sql 을 돌린 뒤 끄고 진짜 서버를 다시 띄운다**. 컨테이너 안 pg_isready 는 그 임시 서버에도 "준비됨"이라 답하고, 밖에서 TCP 로 붙는 순간 서버가 재시작 중이라 끊긴다. WSL 에서는 볼륨에 데이터가 이미 있어 init 단계가 없었기에 안 보였다.
+- 해결: 준비 확인을 "밖에서 실제로 붙어 보기"로 — `migrate.py --wait N` 이 1초마다 재시도(기본 60초). integration.sh 와 수집기 Dockerfile 이 이것을 그대로 쓴다.
+- 배운 것: 헬스 체크는 **소비자와 같은 경로**(같은 호스트·같은 프로토콜)로 해야 한다. 컨테이너 안의 체크는 "프로세스가 있다"지 "밖에서 쓸 수 있다"가 아니다.
