@@ -1,0 +1,7 @@
+label=pi4_generic_idle
+date=2026-11-04T22:28:18+09:00
+kernel=6.8.0-1064-raspi
+realtime=0
+duration_s=300
+stress=none
+cpus=4

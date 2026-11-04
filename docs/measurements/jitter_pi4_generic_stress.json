@@ -1,0 +1,19 @@
+{
+  "label": "pi4_generic_stress",
+  "kernel": "6.8.0-1064-raspi",
+  "preempt_rt": false,
+  "sched_fifo": true,
+  "sched_errno": 0,
+  "mlockall": true,
+  "mlock_errno": 0,
+  "cpu_pin": -1,
+  "period_us": 1000,
+  "seconds": 60.000,
+  "work_us": 50,
+  "iterations": 60000,
+  "samples": 60000,
+  "drops": 0,
+  "wake_us": {"min": 16.726, "avg": 34.573, "p50": 25.134, "p99": 145.706, "p999": 201.884, "max": 781.236, "n": 60000},
+  "period_err_us": {"min": -761.353, "avg": -0.000, "p50": -0.263, "p99": 94.644, "p999": 164.551, "max": 757.253, "n": 59999},
+  "work_us_stats": {"min": 50.092, "avg": 50.263, "p50": 50.148, "p99": 51.407, "p999": 53.111, "max": 134.851, "n": 60000}
+}

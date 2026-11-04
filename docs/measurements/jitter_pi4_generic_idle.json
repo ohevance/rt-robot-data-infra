@@ -1,0 +1,19 @@
+{
+  "label": "pi4_generic_idle",
+  "kernel": "6.8.0-1064-raspi",
+  "preempt_rt": false,
+  "sched_fifo": true,
+  "sched_errno": 0,
+  "mlockall": true,
+  "mlock_errno": 0,
+  "cpu_pin": -1,
+  "period_us": 1000,
+  "seconds": 60.000,
+  "work_us": 50,
+  "iterations": 60000,
+  "samples": 60000,
+  "drops": 0,
+  "wake_us": {"min": 15.385, "avg": 17.601, "p50": 17.676, "p99": 18.496, "p999": 18.787, "max": 24.938, "n": 60000},
+  "period_err_us": {"min": -6.152, "avg": -0.000, "p50": -0.003, "p99": 1.089, "p999": 2.163, "max": 7.626, "n": 59999},
+  "work_us_stats": {"min": 50.092, "avg": 50.135, "p50": 50.130, "p99": 50.167, "p999": 50.185, "max": 50.259, "n": 60000}
+}
