@@ -99,3 +99,9 @@
 - `data_pipeline/record.sh`(rosbag2 MCAP, timeout -s INT 로 곱게 닫기) + `bag_to_csv.py`(CSV 3개 + summary.md: 토픽별 실제 Hz·틈, rt_status 최대값, 관절별 추종 오차). 샌드박스에는 ROS 2 가 없어 가짜 rosbag2_py 로 논리만 검증(100 Hz 10초, 0.5초 틈 1개, 어깨 처짐 0.02 rad → 요약표에 그대로 나옴). WSL 첫 실행에서 rosbag2_py import 가 첫 확인 대상.
 - 영상 대본(`docs/VIDEO_SCRIPT.md`, 6장면 2:00) · 이력서 문장(`docs/RESUME_LINES.md`, 경력 숫자 5개는 빈칸) · Pi 4B 4 GB 기준 표① 안내(`docs/SETUP_RT_MEASURE.md` 전면 개정: Imager → SSH → 일반 커널 기준값 → `pro enable realtime-kernel --variant=raspi` → RT 측정 4조건 → isolcpus 선택).
 - CI 액션 checkout/upload-artifact 를 v5 로(Node 24). 다음 push 에서 초록 유지되는지 확인.
+
+## 2026-11-04 (소실험 2건 — keepalive 박자 확정, QoS 0 비교줄)
+- 실험 ① A/B(같은 수집기·같은 조건, 가상 50대 QoS 1): keepalive **30초 → 튐 0회(172초)**, keepalive **10초 → 튐 2회, 간격 정확히 10.0초**(05:50:08·05:50:18), p95 ≈ 10 ms, max ≈ 32 ms, insert_ms 는 평소와 같음. → 10초 주기 튐의 원인은 장치 50대의 **keepalive 박자**로 확정(거의 동시에 접속해 박자가 맞고, 그 순간 스레드 100개짜리 장치 프로세스가 멈칫). 횟수가 아침(281초에 13회)보다 적은 것은 QoS 1 양방향 트래픽이 keepalive 를 대부분 가려 주기 때문으로 **추정**.
+- 설계 결론: keepalive 는 "죽은 장치 감지 속도(1.5배 뒤 유언)"와 "주기적 동기 부하"의 맞교환. 30초로 늘리면 튐은 없지만 감지가 45초. 더 나은 답은 장치마다 keepalive 에 0~N 초 jitter → `virtual_fleet.py --keepalive-jitter`. (thundering herd 의 작은 버전)
+- 실험 ②(수집기·장치 모두 QoS 0): 수집기 10초 중단 → **유실 508 / 1312**(예측 500 = 50대 × 10초, +8 은 종료·재시작 순간). QoS 1 지속 세션의 0 과 나란히 표③-2 두 줄. "QoS 1 은 공짜가 아니지만 수집기 재시작을 공짜로 만든다"의 숫자.
+- 증상: 가상 장치 두 벌을 겹쳐 띄워 `reconnects=1675`(50대 × 33회). 같은 client_id 충돌(수집기 때와 동일). 해결: 잠금을 `fleet/common/single_instance.py` 로 빼고 수집기·가상 장치(prefix 별) 둘 다 사용. 수집기 컨테이너 Dockerfile 에 common/ 복사 추가.
