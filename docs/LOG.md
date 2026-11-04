@@ -39,3 +39,12 @@
 - 함정: 지속 세션(clean_session=False)은 **구독자가 QoS 1 로 구독하고 발행자도 QoS 1 로 보내야** 브로커가 큐에 담는다. 한쪽만 1 이면 min(0,1)=0 → 유실. 그래서 장애 주입 `collector` 는 qos0/qos1 두 줄로 남긴다.
 - 함정: `pgrep -f collector/collector.py` 로 수집기를 찾을 때 주입 스크립트 자신은 패턴에 안 걸린다(`chaos/inject.py`). 재시작은 `/proc/<pid>/exe`(venv 파이썬 경로)와 `cmdline`·`cwd` 를 그대로 써서 "같은 명령"을 보장.
 - 함정: CI 2단계의 broker 장애에서 QoS 0 이면 소켓에 이미 실린 메시지 1개/장치를 잃을 수 있어 "유실 ≤ 장치 수"로 판정. 통합 테스트는 QoS 1 로 돌려 0 을 기대.
+
+## 2026-11-04 (D5 실측 1차, WSL)
+- 결과(대시보드): OTA 1.1.0 단계 배포가 "펌웨어 버전별 장치 수" 패널에 3 → 25 → 50 으로 보임. 1.2.0-bad 는 3대에서 멈추고 되돌아감. 브로커 10초 중단 → 재전송 폭주 600 msgs/s, 전달 지연 max 12.5 s(밀린 메시지의 원래 측정 시각 기준). DB 10초 중단 → db_errors 11 누적, 복귀 뒤 backlog 0.
+- 증상: 장애 주입 `collector` 에서 수집기를 SIGTERM 으로 죽인 뒤 **재시작한 수집기가 바로 죽음** → 대시보드 "온라인 장치 0", 통계가 11:39:17 에서 멈춤, inject.py 는 복구를 150초 기다림.
+- 원인: 재시작 명령의 파이썬을 `/proc/<pid>/exe` 로 골랐다. 이것은 심볼릭 링크를 끝까지 푼 `/usr/bin/python3.12` 라서 **venv 정보가 사라진다** → `import paho` 실패. 파이썬은 "실행 파일 경로 옆의 pyvenv.cfg" 로 venv 를 알아보므로 `.venv/bin/python3` 경로 그대로 실행해야 한다.
+- 해결: `/proc/<pid>/environ` 의 `VIRTUAL_ENV`·`PATH` 를 읽어 같은 환경으로 재시작(`pick_python`), 1.5초 안에 죽으면 로그 끝을 보여 주고 측정을 중단(150초 헛기다림 제거).
+- 배운 것: "같은 명령으로 재시작"은 실행 파일 경로만이 아니라 **환경(venv, PATH)** 까지 같아야 한다. 프로세스 관리자(systemd)가 환경을 통째로 기록하는 이유.
+- 증상(재현): "오프라인 이벤트 20" 이 D2 와 똑같이 20. 가설 강화: Mosquitto 는 **자기가 종료될 때 접속 중인 모든 클라이언트의 유언을 발행**하는데, 수집기 소켓에 다 쓰기 전에 소켓을 닫아 앞쪽 20개만 도착 → `diag.py` 가 0.5초 안에 몰린 offline 을 군집으로 묶어 이 경우를 가려낸다. 확인 질의: `SELECT time, device_id FROM events WHERE kind='offline' ORDER BY time DESC LIMIT 25`.
+- 환경 함정 2건: (1) venv 는 시스템 패키지를 가리므로 ROS 2(rclpy→yaml·numpy)와 같이 쓰려면 `python3 -m venv --system-site-packages .venv` (2) 터미널마다 `source` 를 잊지 않게 `.bashrc` 에 저장소 이동 + venv + ROS 2 + `RT_REPO_ROOT` 자동 설정을 넣음.

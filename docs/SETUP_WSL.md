@@ -37,16 +37,32 @@ cd ~ && unzip /mnt/c/Users/mgoh/Documents/robot-portfolio/rt-robot-data-infra_D0
 ## 4. 파이썬 가상환경 (이 저장소 전용)
 ```bash
 cd ~/rt-robot-data-infra
-python3 -m venv .venv && source .venv/bin/activate
-pip install --upgrade pip
-pip install mujoco numpy pyyaml paho-mqtt     # D3 이후에 쓰는 것들. 미리 받아 둠
+python3 -m venv --system-site-packages .venv && source .venv/bin/activate   # --system-site-packages: ROS 2(rclpy) 가 쓰는 시스템 패키지(yaml·numpy)를 venv 안에서도 보이게
+pip install -r fleet/requirements.txt                                        # paho-mqtt, psycopg
+python3 -c "import psycopg, paho, rclpy, yaml, numpy; print('venv + ROS 2 ok')"
 ```
+
+## 4-1. 터미널을 열 때 자동으로 (저장소 이동 + venv + ROS 2)
+```bash
+cat >> ~/.bashrc <<'EOF2'
+
+# ---- rt-robot-data-infra 자동 설정 ----
+if [ -d "$HOME/rt-robot-data-infra" ]; then
+    cd "$HOME/rt-robot-data-infra"
+    [ -f .venv/bin/activate ] && source .venv/bin/activate
+    [ -f /opt/ros/jazzy/setup.bash ] && source /opt/ros/jazzy/setup.bash
+    [ -f install/setup.bash ] && source install/setup.bash
+    export RT_REPO_ROOT="$HOME/rt-robot-data-infra"
+fi
+EOF2
+```
+(3번의 `echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc` 는 이 블록이 대신하므로 생략해도 된다)
 
 ## 5. 동작 확인
 ```bash
 cmake -S rt_control/rt_core -B build/rt_core -DCMAKE_BUILD_TYPE=Release
 cmake --build build/rt_core -j
-ctest --test-dir build/rt_core --output-on-failure      # 2 tests passed
+ctest --test-dir build/rt_core --output-on-failure      # 4 tests passed
 ```
 
 ## WSL에서 되는 것 / 안 되는 것

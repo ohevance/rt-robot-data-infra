@@ -28,6 +28,7 @@
 import argparse
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -244,13 +245,15 @@ def run_fault_db(db, a):
 
 
 class HostCollector:
-    """호스트에서 돌고 있는 수집기 프로세스를 찾아 죽이고, 같은 명령으로 다시 띄운다"""
+    """호스트에서 돌고 있는 수집기 프로세스를 찾아 죽이고, 같은 명령·같은 환경(venv 포함)으로 다시 띄운다"""
 
     def __init__(self):
         self.pid = None
         self.exe = None
         self.argv = None
         self.cwd = None
+        self.environ = None
+        self.proc = None
 
     def find(self):
         out = subprocess.run(["pgrep", "-f", "collector/collector.py"], capture_output=True, text=True).stdout.split()
@@ -261,14 +264,10 @@ class HostCollector:
         if len(pids) == 0:
             return False
         self.pid = pids[0]
-        with open(f"/proc/{self.pid}/cmdline", "rb") as f:
-            parts = f.read().split(b"\0")
-        self.argv = []
-        for part in parts:
-            if part:
-                self.argv.append(part.decode())
-        self.exe = os.readlink(f"/proc/{self.pid}/exe")   # venv 의 python 이면 그 경로가 그대로 나온다
+        self.argv = read_proc_list(f"/proc/{self.pid}/cmdline")
+        self.environ = read_proc_environ(f"/proc/{self.pid}/environ")
         self.cwd = os.readlink(f"/proc/{self.pid}/cwd")
+        self.exe = pick_python(self.argv[0], self.environ, self.pid)
         return True
 
     def kill(self):
@@ -276,11 +275,67 @@ class HostCollector:
         os.kill(self.pid, signal.SIGTERM)
 
     def restart(self):
+        """같은 명령으로 재시작. 1.5초 안에 죽으면(모듈 없음 등) False 를 돌려주고 로그 끝을 보여 준다"""
         os.makedirs(os.path.join(REPO, "fleet", "logs"), exist_ok=True)
-        logfile = open(os.path.join(REPO, "fleet", "logs", "collector_restarted.log"), "ab")
+        log_path = os.path.join(REPO, "fleet", "logs", "collector_restarted.log")
+        logfile = open(log_path, "ab")
         cmd = [self.exe] + self.argv[1:]
         log("재시작: " + " ".join(cmd) + f"  (cwd {self.cwd}, 출력 fleet/logs/collector_restarted.log)")
-        subprocess.Popen(cmd, cwd=self.cwd, stdout=logfile, stderr=subprocess.STDOUT, start_new_session=True)
+        self.proc = subprocess.Popen(cmd, cwd=self.cwd, env=self.environ, stdout=logfile, stderr=subprocess.STDOUT,
+                                     start_new_session=True)
+        time.sleep(1.5)
+        if self.proc.poll() is not None:
+            log(f"재시작한 수집기가 바로 죽음 (종료 코드 {self.proc.returncode}). 로그 끝:")
+            print(tail_text(log_path, 15))
+            return False
+        return True
+
+
+def read_proc_list(path):
+    """/proc/<pid>/cmdline: NUL 로 구분된 문자열 목록"""
+    with open(path, "rb") as f:
+        parts = f.read().split(b"\0")
+    result = []
+    for part in parts:
+        if part:
+            result.append(part.decode())
+    return result
+
+
+def read_proc_environ(path):
+    """/proc/<pid>/environ → dict (PATH, VIRTUAL_ENV 등 — 재시작 때 같은 환경을 주기 위해)"""
+    env = {}
+    for item in read_proc_list(path):
+        if "=" in item:
+            key, value = item.split("=", 1)
+            env[key] = value
+    return env
+
+
+def pick_python(argv0, env, pid):
+    """재시작에 쓸 파이썬 실행 파일을 고른다.
+    /proc/<pid>/exe 는 심볼릭 링크를 끝까지 풀어 /usr/bin/python3.12 를 가리키므로 venv 정보가 사라진다 →
+    1) VIRTUAL_ENV/bin/python3  2) 절대 경로 argv[0]  3) 원래 PATH 에서 argv[0] 찾기  4) 마지막으로 /proc/<pid>/exe"""
+    venv = env.get("VIRTUAL_ENV")
+    if venv:
+        candidate = os.path.join(venv, "bin", "python3")
+        if os.path.exists(candidate):
+            return candidate
+    if argv0.startswith("/") and os.path.exists(argv0):
+        return argv0
+    found = shutil.which(argv0, path=env.get("PATH"))
+    if found:
+        return found
+    return os.readlink(f"/proc/{pid}/exe")
+
+
+def tail_text(path, lines):
+    try:
+        with open(path, "rb") as f:
+            data = f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return "(로그 없음)"
+    return "\n".join(data.splitlines()[-lines:])
 
 
 def run_fault_collector(db, a):
@@ -303,7 +358,10 @@ def run_fault_collector(db, a):
     if in_container:
         compose(["start", "collector"], a.compose)
     else:
-        host.restart()
+        if not host.restart():
+            log("수집기 재시작 실패 → 측정 중단. 터미널에서 수집기를 직접 다시 띄우세요 (브로커가 QoS 1 메시지를 들고 있다가 넘겨 줍니다)")
+            db.event("fault", {"fault": "collector", "phase": "restart_failed"})
+            return None
     w = Waiters(db, devices0, t_restore)
     wait_for(w.stats_resumed, 60)
     t_first = db.first_stats_time(t_restore, "msgs_per_s >= 0")

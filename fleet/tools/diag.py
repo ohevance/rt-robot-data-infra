@@ -84,6 +84,37 @@ def classify_offline_events(cur, window, lines):
     lines.append("")
     for verdict, n in verdicts.most_common():
         lines.append(f"- {verdict}: {n}개")
+    report_offline_clusters(offline, lines)
+
+
+def report_offline_clusters(offline, lines):
+    """offline 이벤트가 0.5초 안에 몰려 있으면 → 브로커가 종료되며 유언을 한꺼번에 발행한 것 (Mosquitto 는 종료 때 모든 접속 클라이언트의 유언을 보낸다).
+    50대 중 일부만 찍히는 이유: 유언을 수집기 소켓에 다 쓰기 전에 브로커가 소켓을 닫는다 → 앞쪽 N개만 도착."""
+    if len(offline) < 2:
+        return
+    clusters = []
+    current = [offline[0]]
+    for row in offline[1:]:
+        if (row[0] - current[-1][0]).total_seconds() <= 0.5:
+            current.append(row)
+        else:
+            clusters.append(current)
+            current = [row]
+    clusters.append(current)
+    lines.append("")
+    lines.append("offline 군집 (0.5초 안에 몰린 것):")
+    for cluster in clusters:
+        if len(cluster) < 2:
+            continue
+        span_ms = (cluster[-1][0] - cluster[0][0]).total_seconds() * 1000.0
+        devices = [r[1] for r in cluster]
+        shown = ", ".join(devices[:8])
+        more = ""
+        if len(devices) > 8:
+            more = f" ... (+{len(devices) - 8})"
+        lines.append(f"- {cluster[0][0].strftime('%H:%M:%S.%f')[:-3]} 부터 {span_ms:.0f} ms 안에 {len(cluster)}대: {shown}{more}")
+        lines.append("  → 한 번에 몰린 offline 은 '브로커 종료 시 유언 일괄 발행'. 장치가 실제로 하나씩 끊긴 것이 아니다. "
+                     "확인: docker compose stop mqtt 시각과 일치하는지, 장치 번호가 접속 순서(앞 번호)인지")
 
 
 def fmt(x):
