@@ -84,3 +84,13 @@
 - 숫자(러너): MuJoCo 한 주기 비용 p50 6.4 / p99 8.5 / max 29.4 us — 1 kHz 주기의 0.9%. 즉 물리 계산은 예산의 1% 이고 나머지는 전부 "깨어나는 지연"의 몫이라는 뜻 → 표①의 RT 커널 실측이 왜 핵심인지가 숫자로 설명된다.
 - 숫자(러너, 10대 2 Hz): broker 5초 → 전 장치 3.2초, 유실 0/318 · db 5초 → backlog 0 까지 1.2초, 뒤늦게 112행, 유실 0 · collector(qos1) 5초 → 1.5초, 유실 0/280 · bad_firmware → 1/10 에서 롤백 0.4초. WSL(50대) 결과와 같은 모양 — 환경이 아니라 설계가 만든 숫자.
 - 남은 경고: actions/checkout@v4·upload-artifact@v4 의 Node 20 deprecation 안내. 실패 아님. 초록일 때 건드리지 않고, 다음 번들 묶음에서 v5 로 올린다.
+
+## 2026-11-04 (D5 MuJoCo — WSL 노드에 물리 연결 성공)
+- `get_mujoco.sh` → `rt_core_mj` 빌드 → 테스트 통과 → colcon(MuJoCo 옵션) → `so101_mujoco.params.yaml` 로 노드 기동. 관절 이름 6개(Rotation·Pitch·Elbow·Wrist_Pitch·Wrist_Roll·Jaw)가 menagerie 모델과 그대로 일치해 매핑 수정 없음.
+- 숫자(WSL, 일반 스케줄링 — prlimit 를 안 건 터미널이라 sched_fifo=false):
+  - 단독 테스트: 물리 한 주기 p50 4.9 / p99 6.3 / max 20.8 us (러너 6.4 / 8.5 / 29.4 와 같은 급).
+  - 노드 안 `work_us`(제어 단계 + mj_step + 상태 벨트): p50 41.3 / p99 145.1 / max 247.4 us — 단독보다 큰 이유는 1 kHz 루프의 캐시 냉각·WSL 가상 커널 선점·RT 우선순위 없음. 그래도 1 ms 예산의 15%(p99) 안. `wake_us` p99 339 / max 2026 us 는 D1 과 같은 WSL 한계.
+  - 명령 50 Hz 를 주자 `state` READY → RUNNING, `watchdog` tripped → ok, `step_limited` 10(그리퍼 0.5 rad 를 0.05 씩), 221 명령 전부 적용, 드롭 0.
+- 물리가 보여 준 것(SimLag 로는 못 보는 것): 목표 [0.3, -0.2, 0.1, 0, 0, 0.5] 에 대해 위치 [0.299, **-0.180**, 0.109, 0.002, 0.000, 0.499]. 어깨 Pitch 관절만 0.02 rad(약 1.1°) 못 미침 = **중력에 팔 무게가 걸려 position 액추에이터(유한한 kp)가 처지는 정상 상태 오차**. 실물에서도 같은 자리에서 같은 일이 난다 → 중력 보상(토크 피드포워드)이 왜 필요한지의 숫자 근거.
+- 함정: 터미널 B 의 `ros2 topic echo` 가 "does not appear to be published yet". 노드는 살아 있고 `node list` 에는 보임. 원인: 아침 DDS 측정 때 다른 RMW 로 떠 있던 **ros2 데몬**이 Fast DDS 노드의 토픽을 못 봄. 해결: `ros2 daemon stop` 후 재시도. 배운 것: RMW 를 바꿔 가며 실험한 뒤에는 데몬을 지운다(데몬은 사용자당 하나, 처음 뜬 RMW 로 고정).
+- 소음: `ros2 topic echo /joint_states --once` 가 "A message was lost!!! total count change:10" — 100 Hz 발행을 늦게 구독한 CLI 가 자기 큐(깊이 10)에서 밀린 것을 알려 주는 것. 노드 쪽 드롭(state_drops)은 0.
