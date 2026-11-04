@@ -17,7 +17,7 @@
 |---|---|---|
 | ① 실시간 Linux 미들웨어 · ROS 2/DDS | `rt_control` (RT 커널 실측 + 1 kHz 루프) · `dds_bench` | 표① 지연·지터 · 표② DDS 손실·지연 |
 | ② 로깅·모니터링·시각화·업데이트 | `fleet` (수집 → Timescale → Grafana · OTA · 롤백) | 롤백 완료 시간 · 장애 복구 시간 |
-| ③ 센서 스트리밍·로깅·전처리 | `fleet` 에이전트 · `data_pipeline`(최소 기록) | 초당 메시지 수 · p95 지연 |
+| ③ 센서 스트리밍·로깅·전처리 | `fleet` 에이전트(장치→서버 1 Hz) · `data_pipeline`(로봇 안 100 Hz 기록 → CSV → 검증 요약) | 초당 메시지 수 · p95 지연 · 기록 주기·틈·추종 오차 |
 | ④ 시뮬레이션 · CI | `backends/mujoco` · `.github/workflows` | CI 배지 · 테스트 수 |
 
 ## 2. 오늘(D0)까지 만든 부분: rt_core

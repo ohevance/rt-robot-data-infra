@@ -41,6 +41,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 - `fleet` — Mosquitto·TimescaleDB·Grafana(docker-compose), 장치 에이전트(버퍼·재전송·유언·**OTA 적용/롤백**), 가상 장치 N대, RT 노드 다리, 수집기(1초 묶음 COPY + 통계 + **DB 끊김 backlog** + **지속 세션 옵션**), **OTA 단계 배포기**, **장애 주입 4종 + 판정**, 진단 도구, DB 마이그레이션, 대시보드 생성기(14 패널), 단위 테스트 3개(가짜 브로커·DB) + 통합 테스트 스크립트
 - `scripts/` — `cyclictest_run.sh`(표① 측정), `make_table1/2/3.py`(표), `profile_to_params.py`(로봇 프로필 → ROS 파라미터, 백엔드 선택), **`get_mujoco.sh`**(MuJoCo + Menagerie 모델)
 - `.github/workflows/ci.yml` — 3잡: 빌드·단위 테스트·1 kHz 연기 테스트 → 진짜 컨테이너 통합(장애 3종 + OTA) · MuJoCo 헤드리스
+- `data_pipeline/` — 로봇 안 고주기 데이터 기록(rosbag2 MCAP) → CSV → 검증 요약(주기·틈·추종 오차)
 - `robots/` — 로봇 프로필(SO-101 · ALLEX 자리) · `backends/mujoco/README.md` — MuJoCo 설치·실행
 - `docs/` — 읽기 가이드(25 항목) · 구조 · 용어집 · 결정 기록 · 작업 로그 · 설치 안내 · `measurements/`(표①②③ 원본 JSON)
 
@@ -58,7 +59,8 @@ python3 fleet/tests/test_fleet_logic.py && python3 fleet/tests/test_ota_rollout.
 - 구조: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - 용어: [`docs/GLOSSARY.md`](docs/GLOSSARY.md)
 - 왜 이렇게 했나: [`docs/DECISIONS.md`](docs/DECISIONS.md) · 깨진 것과 해결: [`docs/LOG.md`](docs/LOG.md)
-- 설치: WSL 개발 [`docs/SETUP_WSL.md`](docs/SETUP_WSL.md) · 표① 실측 [`docs/SETUP_RT_MEASURE.md`](docs/SETUP_RT_MEASURE.md)
+- 설치: WSL 개발 [`docs/SETUP_WSL.md`](docs/SETUP_WSL.md) · 표① 실측(Pi 4 + PREEMPT_RT) [`docs/SETUP_RT_MEASURE.md`](docs/SETUP_RT_MEASURE.md)
+- 발표 자료: 2분 영상 대본 [`docs/VIDEO_SCRIPT.md`](docs/VIDEO_SCRIPT.md) · 이력서 문장 [`docs/RESUME_LINES.md`](docs/RESUME_LINES.md) · 인수인계 [`docs/HANDOVER.md`](docs/HANDOVER.md)
 
 ## 작성 방식
 설계·검토·측정·해석은 작성자(오문규). 코드 초안과 스크립트·설정 템플릿은 AI 도구(Claude)의 보조로 작성했고,

@@ -94,3 +94,8 @@
 - 물리가 보여 준 것(SimLag 로는 못 보는 것): 목표 [0.3, -0.2, 0.1, 0, 0, 0.5] 에 대해 위치 [0.299, **-0.180**, 0.109, 0.002, 0.000, 0.499]. 어깨 Pitch 관절만 0.02 rad(약 1.1°) 못 미침 = **중력에 팔 무게가 걸려 position 액추에이터(유한한 kp)가 처지는 정상 상태 오차**. 실물에서도 같은 자리에서 같은 일이 난다 → 중력 보상(토크 피드포워드)이 왜 필요한지의 숫자 근거.
 - 함정: 터미널 B 의 `ros2 topic echo` 가 "does not appear to be published yet". 노드는 살아 있고 `node list` 에는 보임. 원인: 아침 DDS 측정 때 다른 RMW 로 떠 있던 **ros2 데몬**이 Fast DDS 노드의 토픽을 못 봄. 해결: `ros2 daemon stop` 후 재시도. 배운 것: RMW 를 바꿔 가며 실험한 뒤에는 데몬을 지운다(데몬은 사용자당 하나, 처음 뜬 RMW 로 고정).
 - 소음: `ros2 topic echo /joint_states --once` 가 "A message was lost!!! total count change:10" — 100 Hz 발행을 늦게 구독한 CLI 가 자기 큐(깊이 10)에서 밀린 것을 알려 주는 것. 노드 쪽 드롭(state_drops)은 0.
+
+## 2026-11-04 (D6 시작 — 기록 파이프라인·발표 자료·Pi 안내)
+- `data_pipeline/record.sh`(rosbag2 MCAP, timeout -s INT 로 곱게 닫기) + `bag_to_csv.py`(CSV 3개 + summary.md: 토픽별 실제 Hz·틈, rt_status 최대값, 관절별 추종 오차). 샌드박스에는 ROS 2 가 없어 가짜 rosbag2_py 로 논리만 검증(100 Hz 10초, 0.5초 틈 1개, 어깨 처짐 0.02 rad → 요약표에 그대로 나옴). WSL 첫 실행에서 rosbag2_py import 가 첫 확인 대상.
+- 영상 대본(`docs/VIDEO_SCRIPT.md`, 6장면 2:00) · 이력서 문장(`docs/RESUME_LINES.md`, 경력 숫자 5개는 빈칸) · Pi 4B 4 GB 기준 표① 안내(`docs/SETUP_RT_MEASURE.md` 전면 개정: Imager → SSH → 일반 커널 기준값 → `pro enable realtime-kernel --variant=raspi` → RT 측정 4조건 → isolcpus 선택).
+- CI 액션 checkout/upload-artifact 를 v5 로(Node 24). 다음 push 에서 초록 유지되는지 확인.
