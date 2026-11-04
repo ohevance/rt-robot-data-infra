@@ -7,13 +7,14 @@
 #
 # 사용법 (root 필요):
 #   sudo scripts/cyclictest_run.sh <label> <초> [stress]
-#   예) sudo scripts/cyclictest_run.sh generic_idle   600
-#       sudo scripts/cyclictest_run.sh generic_stress 600 stress
-#       sudo scripts/cyclictest_run.sh rt_idle        3600
-#       sudo scripts/cyclictest_run.sh rt_stress      3600 stress
+#   예) sudo scripts/cyclictest_run.sh pi4_generic_idle   300
+#       sudo scripts/cyclictest_run.sh pi4_generic_stress 120 stress     # 방열판 없는 Pi 4 는 부하 120초까지
+#       sudo scripts/cyclictest_run.sh pi4_rt_idle        300
+#       sudo scripts/cyclictest_run.sh pi4_rt_stress      120 stress
 #
-# 결과: docs/measurements/cyclictest_<label>.txt (+ .meta: 커널·날짜)
+# 결과: docs/measurements/cyclictest_<label>.txt (+ .meta: 커널·날짜·온도·스로틀)
 #       → scripts/make_table1.py 가 읽어서 표①(마크다운)을 만든다
+# 읽는 순서: 메타 기록 → (부하 시작) → cyclictest → 온도·스로틀 덧붙임 → 요약 출력
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -24,10 +25,14 @@ OUTDIR="docs/measurements"
 OUT="${OUTDIR}/cyclictest_${LABEL}.txt"
 mkdir -p "${OUTDIR}"
 
+# shellcheck source=scripts/lib_thermal.sh
+source "$(dirname "$0")/lib_thermal.sh"
+
 if ! command -v cyclictest >/dev/null; then
   echo "cyclictest 가 없습니다:  sudo apt install rt-tests" >&2; exit 1
 fi
 
+TEMP_BEFORE="$(read_temp_mc)"
 {
   echo "label=${LABEL}"
   echo "date=$(date -Iseconds)"
@@ -55,5 +60,9 @@ cyclictest -m -S -p 90 -i 1000 -h 1000 -q -D "${DUR}" > "${OUT}"
 
 if [ -n "${SPID}" ]; then wait "${SPID}" 2>/dev/null || true; fi
 
+# 측정 뒤 온도·스로틀을 메타에 덧붙인다 (스로틀 != 0 이면 이 측정은 "오염 가능"으로 표에 표시된다)
+thermal_meta_lines "${TEMP_BEFORE}" >> "${OUT}.meta"
+
 echo "saved: ${OUT}"
 grep -E "^# (Min|Avg|Max) Latencies" "${OUT}" || true
+thermal_summary "${TEMP_BEFORE}"

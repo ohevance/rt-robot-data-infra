@@ -1,0 +1,10 @@
+label=pi4_generic_idle
+date=2026-11-04T22:25:00+09:00
+kernel=6.8.0-1064-raspi
+realtime=0
+duration_s=60
+stress=idle
+cpu=none
+temp_before_mC=45277
+temp_after_mC=na
+throttled_after=0

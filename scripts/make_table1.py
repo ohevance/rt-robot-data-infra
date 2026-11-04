@@ -30,16 +30,46 @@ def _percentile_from_hist(hist, total, p):
     return hist[-1][0] if hist else 0
 
 
-def parse_cyclictest(path):
-    """cyclictest -h 출력 파싱. 반환: dict(label, kernel, realtime, stress, min, avg, p50, p99, p999, max, overflow)"""
+def read_meta(path):
+    """<결과 파일>.meta (key=value 한 줄씩) → dict. 없으면 빈 dict"""
     meta = {}
     mpath = path + ".meta"
-    if os.path.exists(mpath):
-        with open(mpath, encoding="utf-8") as f:
-            for line in f:
-                if "=" in line:
-                    k, v = line.strip().split("=", 1)
-                    meta[k] = v
+    if not os.path.exists(mpath):
+        return meta
+    with open(mpath, encoding="utf-8") as f:
+        for line in f:
+            if "=" in line:
+                k, v = line.strip().split("=", 1)
+                meta[k] = v
+    return meta
+
+
+def _mc_to_c(text):
+    """밀리도 문자열 → '45.3' 같은 °C 문자열. 숫자가 아니면 None"""
+    try:
+        return f"{int(text) / 1000.0:.1f}"
+    except (TypeError, ValueError):
+        return None
+
+
+def thermal_note(meta):
+    """온도·스로틀을 비고에 붙일 문자열. 스로틀 플래그가 0 이 아니면 경고 — 그 줄의 수치는 클럭 저하가 섞였을 수 있다"""
+    before = _mc_to_c(meta.get("temp_before_mC"))
+    after = _mc_to_c(meta.get("temp_after_mC"))
+    if before is None or after is None:
+        return ""
+    note = f" · 온도 {before}→{after} °C"
+    throttled = meta.get("throttled_after", "na")
+    if throttled in ("0", "0x0"):
+        note += ", 스로틀 0"
+    elif throttled != "na":
+        note += f", ⚠ 스로틀 {throttled}"
+    return note
+
+
+def parse_cyclictest(path):
+    """cyclictest -h 출력 파싱. 반환: dict(label, kernel, realtime, stress, min, avg, p50, p99, p999, max, overflow)"""
+    meta = read_meta(path)
 
     per_cpu_hist = {}  # cpu -> [(us, count)]
     mins = avgs = maxs = []
@@ -88,7 +118,7 @@ def parse_cyclictest(path):
         "p999": p999,
         "max": max(maxs) if maxs else 0,
         "overflow": sum(overflows) if overflows else 0,
-        "note": f"{len(per_cpu_hist)} CPU, worst-CPU values",
+        "note": f"{len(per_cpu_hist)} CPU, worst-CPU values" + thermal_note(meta),
     }
 
 
@@ -96,17 +126,18 @@ def parse_jitter(path):
     with open(path, encoding="utf-8") as f:
         j = json.load(f)
     w = j["wake_us"]
+    meta = read_meta(path)      # scripts/jitter_run.sh 가 남긴 부하·온도 (직접 실행한 옛 결과에는 없다 → '-')
     return {
         "source": "jitter_bench",
         "label": j.get("label", os.path.basename(path)),
         "kernel": j.get("kernel", "?"),
         "realtime": bool(j.get("preempt_rt")),
-        "stress": "-",
+        "stress": meta.get("stress", "-"),
         "min": w["min"], "avg": w["avg"], "p50": w["p50"], "p99": w["p99"], "p999": w["p999"], "max": w["max"],
         "overflow": j.get("drops", 0),
         "note": "SCHED_FIFO={} mlockall={} cpu_pin={} period={}us".format(
             "ok" if j.get("sched_fifo") else "no", "ok" if j.get("mlockall") else "no",
-            j.get("cpu_pin", -1), j.get("period_us", "?")),
+            j.get("cpu_pin", -1), j.get("period_us", "?")) + thermal_note(meta),
     }
 
 
@@ -145,6 +176,7 @@ def main():
     lines.append("")
     lines.append("- p99.9 = 1,000번 중 999번은 이 값 이내. 제어 루프는 평균이 아니라 이 값과 max로 판단한다.")
     lines.append("- cyclictest 는 CPU마다 스레드 하나씩이며 가장 나쁜 CPU 값을 적었다.")
+    lines.append("- 비고의 온도·스로틀은 측정 스크립트(cyclictest_run.sh · jitter_run.sh)가 남긴 .meta 에서. '⚠ 스로틀' 이 붙은 줄은 클럭 저하가 섞였을 수 있다.")
     text = "\n".join(lines) + "\n"
 
     if a.out == "-":

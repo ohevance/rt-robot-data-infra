@@ -105,3 +105,15 @@
 - 설계 결론: keepalive 는 "죽은 장치 감지 속도(1.5배 뒤 유언)"와 "주기적 동기 부하"의 맞교환. 30초로 늘리면 튐은 없지만 감지가 45초. 더 나은 답은 장치마다 keepalive 에 0~N 초 jitter → `virtual_fleet.py --keepalive-jitter`. (thundering herd 의 작은 버전)
 - 실험 ②(수집기·장치 모두 QoS 0): 수집기 10초 중단 → **유실 508 / 1312**(예측 500 = 50대 × 10초, +8 은 종료·재시작 순간). QoS 1 지속 세션의 0 과 나란히 표③-2 두 줄. "QoS 1 은 공짜가 아니지만 수집기 재시작을 공짜로 만든다"의 숫자.
 - 증상: 가상 장치 두 벌을 겹쳐 띄워 `reconnects=1675`(50대 × 33회). 같은 client_id 충돌(수집기 때와 동일). 해결: 잠금을 `fleet/common/single_instance.py` 로 빼고 수집기·가상 장치(prefix 별) 둘 다 사용. 수집기 컨테이너 Dockerfile 에 common/ 복사 추가.
+
+## 2026-11-04 밤 (D6 — Pi 4 세팅, 일반 커널 기준값 4줄, Ubuntu One 장애)
+- 준비: 갖고 있던 Pi 4 Model B 4 GB 의 카드는 다른 곳에서 쓰던 Raspberry Pi OS 12(bookworm)라 지우지 않고 보관, 새 카드(Samsung PRO Plus 512 GB)에 Raspberry Pi Imager 로 **Ubuntu Server 24.04.5 LTS 64-bit** 를 구움(hostname `pi-rt`, 사용자 `mgoh`, Wi-Fi·SSH 비밀번호 인증을 Imager 설정에서 미리 넣음). 첫 부팅만 모니터로 확인(IP 192.168.45.250, 커널 `6.8.0-1064-raspi`, 45 °C), 이후 전부 PC PowerShell 에서 `ssh mgoh@<IP>`. 이더넷 없이 Wi-Fi 로 충분했다.
+- 빌드: `apt install git build-essential cmake rt-tests stress-ng` → clone → rt_core 빌드(GCC 13.3, arm64) → **ctest 4/4 통과**. x86(WSL·CI)에서 쓴 코드가 arm64 에서 수정 없이 돌았다(고정 크기 배열·표준 C++17 만 쓴 덕).
+- 결과(일반 커널 6.8.0-1064-raspi, governor performance, `docs/measurements/table1_pi4.md`):
+  - jitter_bench 60초: 한가 p99.9 18.8 / **max 24.9** us · 부하(stress-ng cpu4+io2+vm1) p99.9 201.9 / **max 781.2** us, `work time` max 134.9 us(50 us 일하는 도중에 밀림), 드롭 0.
+  - cyclictest(4 CPU, 가장 나쁜 CPU): 한가 300초 p99.9 57 / **max 376** us · 부하 120초 p99.9 118 / **max 695** us, 오버플로 0.
+- 읽기: **한가해도 5분 창에서는 376 us 가 나온다**(60초 단일 스레드 jitter_bench 는 24.9). 드문 커널 내부 작업(타이머 이동·Wi-Fi 드라이버·백그라운드 서비스 중 무엇인지는 미확인)이 분 단위로 한 번씩 수백 us 를 가져간다 → 일반 커널에서는 "부하가 없으면 안전"이 성립하지 않는다. 부하 중 max 695~781 us 는 1 ms 예산의 70~80%. RT 커널의 과제는 이 max 를 200 us 아래로, 한가/부하 차이를 작게.
+- 발견(열): 부하 75초에 **45 → 75 °C**(방열판 없음). Pi 4 는 80 °C 부터 펌웨어가 클럭을 내리므로 300초 부하는 수치를 오염시킨다. `/sys/devices/platform/soc/soc:firmware/get_throttled` 가 0 → 오늘 값은 전부 깨끗함. 결정: 부하 측정은 120초까지(RT 커널도 같은 120초로 비교), 측정 스크립트가 온도·스로틀을 `.meta` 에 자동 기록(`scripts/lib_thermal.sh`, `cyclictest_run.sh`, 새 `jitter_run.sh`), `make_table1.py` 가 비고에 "온도 a→b °C, 스로틀 0" 또는 "⚠ 스로틀" 을 붙인다.
+- 실수: WSL 용 scp·git 명령을 **Pi 창**에 침 → Pi 가 자기 자신에게 복사하려다 root 소유 파일(sudo 로 만든 결과)에 "Permission denied", git 은 "Author identity unknown". 해결: Pi 에서 `git reset` + `chown -R mgoh`, 명령은 WSL 창에서 다시. 배운 것: 창이 둘 이상이면 안내에 **[Pi 창]/[WSL 창]** 을 붙인다(SETUP 문서 수정). 결과 원본은 WSL 로 `scp` 해 커밋(b4c6f3b) — Pi 는 측정만 하고 커밋하지 않는다.
+- 막힘(Ubuntu One): 실시간 커널은 Ubuntu Pro 토큰이 필요한데 Ubuntu One 가입이 두 번 실패. `ubuntu.com/pro` 경유는 "Oops", `login.ubuntu.com/+new_account` 직접은 오류문이 보였다: *"Dry run of setting username(...) with placeholder openid_identifier in Launchpad failed with (The read operation timed out)"* = 가입 시 Launchpad 에 사용자명을 검사하는 호출이 시간 초과 → Canonical 쪽. 입력값(한글 이름 등)과 무관. 내일 오전 재시도. 플랜 B 는 WSL 에서 Pi 커널(rpi-6.12.y)을 PREEMPT_RT 로 크로스 컴파일(2~3시간) — 내일도 막히면 그때.
+- 다음: 토큰 → `sudo pro attach` → `sudo pro enable realtime-kernel --variant=raspi` → 재부팅 → `uname -r`, `/sys/kernel/realtime` = 1 → 같은 4조건(한가·부하 × jitter_bench·cyclictest) + CPU 고정(`--cpu 3`) + (선택) isolcpus=3 → `table1_pi4.md` 갱신 → README 숫자.

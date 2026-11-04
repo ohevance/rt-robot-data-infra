@@ -1,0 +1,10 @@
+label=pi4_generic_stress
+date=2026-11-04T22:26:00+09:00
+kernel=6.8.0-1064-raspi
+realtime=0
+duration_s=60
+stress=stress
+cpu=none
+temp_before_mC=na
+temp_after_mC=74984
+throttled_after=0
