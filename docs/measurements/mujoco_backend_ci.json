@@ -1,0 +1,1 @@
+{"model": "/home/runner/work/rt-robot-data-infra/rt-robot-data-infra/third_party/mujoco_menagerie/trs_so_arm100/so_arm100.xml", "dof": 6, "period_us": 1000, "cycles": 2000, "substeps": 1, "step_us": {"p50": 6.4, "p99": 8.5, "max": 29.4}, "joint0_moved_rad": 0.2988}
