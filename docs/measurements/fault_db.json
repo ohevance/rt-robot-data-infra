@@ -1,0 +1,22 @@
+{
+  "fault": "db",
+  "method": "docker compose stop db",
+  "duration_s": 10.0,
+  "baseline_devices": 50,
+  "baseline_rate": 50.0,
+  "detect_s": 0.4,
+  "recover_db_up_s": 0.8,
+  "recover_backlog_drained_s": 1.4,
+  "rows_written_late": 570,
+  "db_errors_total": 11,
+  "loss": {
+    "expected": 1341,
+    "received": 1341,
+    "lost": 0,
+    "devices": 50
+  },
+  "t_inject": "2026-11-04T02:38:48.941001+00:00",
+  "t_restore": "2026-11-04T02:39:00.093066+00:00",
+  "label": "",
+  "measured_at": "2026-11-04T02:39:17.044085+00:00"
+}

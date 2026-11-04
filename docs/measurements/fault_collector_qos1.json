@@ -1,0 +1,21 @@
+{
+  "fault": "collector",
+  "method": "SIGTERM + 같은 명령으로 재시작",
+  "duration_s": 10.0,
+  "baseline_devices": 50,
+  "baseline_rate": 50.0,
+  "detect_s": null,
+  "recover_first_stats_s": 1.2,
+  "recover_all_devices_s": 1.6,
+  "loss": {
+    "expected": 1312,
+    "received": 1312,
+    "lost": 0,
+    "devices": 50
+  },
+  "loss_if_no_protection": 25000,
+  "t_inject": "2026-11-04T02:50:14.493970+00:00",
+  "t_restore": "2026-11-04T02:50:24.508699+00:00",
+  "label": "qos1",
+  "measured_at": "2026-11-04T02:50:42.209072+00:00"
+}
