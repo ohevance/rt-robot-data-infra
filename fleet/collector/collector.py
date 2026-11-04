@@ -39,7 +39,6 @@ DB 가 죽어도 데이터를 잃지 않는다 (D4, 장애 주입 --fault db)
   python3 fleet/collector/collector.py --dry-run      # DB 없이 통계만 출력 (브로커는 필요)
 """
 import argparse
-import fcntl
 import json
 import os
 import signal
@@ -49,7 +48,8 @@ import time
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-LOCK_PATH = os.path.join(HERE, "..", "logs", "collector.lock")
+sys.path.insert(0, os.path.join(HERE, "..", "common"))
+import single_instance  # noqa: E402  (fleet/common/single_instance.py — 수집기·가상 장치 공용 잠금)
 
 import paho.mqtt.client as mqtt
 
@@ -315,27 +315,13 @@ STOP = {"requested": False}   # 종료 신호를 받으면 True (시그널 핸�
 
 
 def acquire_single_instance_lock():
-    """fleet/logs/collector.lock 을 잠근다. 이미 다른 수집기가 잡고 있으면 None (그 pid 는 파일 안에 적혀 있다)"""
-    os.makedirs(os.path.dirname(LOCK_PATH), exist_ok=True)
-    lock_file = open(LOCK_PATH, "a+")
-    try:
-        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        lock_file.seek(0)
-        other = lock_file.read().strip()
-        lock_file.close()
-        print(f"collector: 이미 수집기가 떠 있습니다 (pid {other or '?'}). client_id 가 같아 둘이 서로 끊으므로 하나만 둡니다.\n"
-              f"          기존 것을 끝내려면:  kill -TERM {other or '<pid>'}   (곱게 종료 → 마지막 적재 후 끝남)")
-        return None
-    lock_file.seek(0)
-    lock_file.truncate()
-    lock_file.write(str(os.getpid()))
-    lock_file.flush()
-    return lock_file   # 열어 둔 채로 들고 있어야 잠금이 유지된다
-
-
-def request_stop(signum, frame):
-    STOP["requested"] = True
+    """fleet/logs/collector.lock 을 잠근다. 이미 다른 수집기가 잡고 있으면 안내하고 None"""
+    lock_file = single_instance.acquire("collector")
+    if lock_file is None:
+        other = single_instance.other_pid("collector")
+        print(f"collector: 이미 수집기가 떠 있습니다 (pid {other}). client_id 가 같아 둘이 서로 끊으므로 하나만 둡니다.\n"
+              f"          기존 것을 끝내려면:  kill -TERM {other}   (곱게 종료 → 마지막 적재 후 끝남)")
+    return lock_file
 
 
 def shutdown(c):

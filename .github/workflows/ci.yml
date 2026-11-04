@@ -28,7 +28,7 @@ jobs:
   rt_core:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install toolchain
         run: sudo apt-get update && sudo apt-get install -y cmake g++ python3
@@ -58,7 +58,7 @@ jobs:
       - name: Dashboard JSON is valid
         run: python3 fleet/grafana/make_dashboard.py && python3 -c "import json; json.load(open('fleet/grafana/provisioning/dashboards/fleet_overview.json'))"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: jitter-ci
           path: |
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: rt_core
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Python deps
         run: pip install -r fleet/requirements.txt
@@ -78,7 +78,7 @@ jobs:
         run: KEEP=0 bash fleet/tests/integration.sh
         timeout-minutes: 15
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: fleet-integration
@@ -88,7 +88,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: rt_core
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install toolchain
         run: sudo apt-get update && sudo apt-get install -y cmake g++ git
@@ -108,7 +108,7 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/third_party/mujoco/lib
         run: ctest --test-dir build/rt_core_mj --output-on-failure -R mujoco
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: mujoco-ci

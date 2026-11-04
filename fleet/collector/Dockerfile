@@ -6,6 +6,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY collector/ collector/
+COPY common/ common/
 COPY db/ db/
 # 시작할 때 마이그레이션(새 표·컬럼)을 먼저 적용하고 수집기를 띄운다
 CMD ["sh", "-c", "python3 db/migrate.py --db $DB_DSN && exec python3 collector/collector.py --broker $BROKER --db $DB_DSN --qos ${COLLECTOR_QOS:-0}"]

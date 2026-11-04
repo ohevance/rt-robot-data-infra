@@ -1,7 +1,7 @@
 # 코드 읽기 가이드 (분석용)
 
 D0 측정기(1~8번), D1 제어 단계·ROS 2 노드·DDS 측정(9~13번), D2 관제(14~16번), D3 상태 머신·OTA(17~19번),
-D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24~25번). 전부 합쳐 약 5,000줄.
+D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24~25번), D6 기록 파이프라인(26번). 전부 합쳐 약 5,400줄.
 아래 순서로 읽으면 됩니다. 막히는 곳은 "파일명 + 줄 번호"로 물어보면 그 부분만 설명합니다.
 
 ## 1. 읽는 순서
@@ -32,6 +32,7 @@ D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24
 | 22 | `fleet/tests/fake_mqtt.py` · `fake_psycopg.py` · `test_ota_rollout.py` · `test_collector_resilience.py` | 약 180 / 110 / 130 / 120 | 브로커·DB 없이 끝-대-끝을 돌리는 가짜들과 그 위의 테스트 | 가짜 브로커가 "동기 전달"인 것이 테스트를 어떻게 단순하게 하나 · 어디까지가 가짜고 어디부터가 진짜(integration.sh)인가 |
 | 23 | `.github/workflows/ci.yml` · `fleet/tests/integration.sh` · `fleet/db/migrate.py` | 약 110 / 60 / 60 | CI 3잡(rt_core → fleet_integration · mujoco) · 진짜 컨테이너 통합 테스트 · 번호 붙은 마이그레이션 | 1단계와 2단계가 각각 무엇을 증명하나 · init.sql 과 migrations 를 둘 다 두는 이유 |
 | 24 | `rt_control/rt_core/include/rt_core/mujoco_backend.hpp` · `src/mujoco_backend.cpp` | 약 90 / 230 | MuJoCo 를 Backend 로: 모델 로드 → 걸음 맞추기(ceil) → 관절 이름/액추에이터 연결 → 매 주기 ctrl 쓰고 mj_step, qpos/qvel 읽기 | init 에서만 할당하고 RT 에서는 안 하는 경계가 어디인가 · substeps 를 올림(ceil)으로 잡는 이유 · 관절 이름이 틀렸을 때 무엇을 출력하나 |
+| 26 | `data_pipeline/record.sh` · `data_pipeline/bag_to_csv.py` | 약 20 / 230 | rosbag2(MCAP) 기록 → CSV 3개 + 검증 요약(주기·틈·추종 오차) | "로깅"과 "관제"가 왜 다른 길인가 · 추종 오차에서 중력 처짐을 어떻게 읽나 |
 | 25 | `rt_control/rt_core/test/test_mujoco_backend.cpp` · `scripts/get_mujoco.sh` · `rt_control_node.cpp` 의 `make_backend()` | 약 130 / 60 / 50 | 물리 모델 위 2000주기 테스트(움직임 + 한 주기 비용 p99) · 설치 · 파라미터로 백엔드 고르기 | 테스트가 p99 < 900 us 를 보는 이유(1 kHz 안에 물리가 들어오나) · 노드가 MuJoCo 없이 빌드됐을 때 어떻게 실패하나(조용히 바꾸지 않는다) |
 
 ## 2. 모든 파일에 던지는 질문 3개
