@@ -27,12 +27,8 @@ trap cleanup EXIT
 
 echo "--- 1) 브로커·DB 올리기"
 $COMPOSE up -d mqtt db
-for i in $(seq 1 90); do
-  if docker exec fleet_db pg_isready -U fleet -d fleet >/dev/null 2>&1; then break; fi
-  sleep 1
-done
-docker exec fleet_db pg_isready -U fleet -d fleet
-python3 fleet/db/migrate.py
+# DB 준비 확인은 밖에서 실제로 붙어 보는 migrate.py --wait 로 (컨테이너 안 pg_isready 는 init 중 임시 서버에도 "accepting" 이라고 답한다)
+python3 fleet/db/migrate.py --wait 120
 
 echo "--- 2) 수집기(지속 세션) + 가상 장치 ${COUNT}대 @ ${RATE} Hz (QoS 1)"
 pkill -TERM -f collector/collector.py || true
