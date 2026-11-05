@@ -19,5 +19,7 @@
 | `cyclictest_pi4_rt_{idle,stress}.txt` (+`.meta`) | 표준 도구, RT 커널 한가 300 s / 부하 120 s | `scripts/cyclictest_run.sh` | Pi 4B, RT 커널 |
 | `jitter_pi4_rt_stress_pin_work0.json` | 도구 불일치 검증(E19-d): 일 없이(`--work-us 0`) CPU 2 고정, 부하 | `jitter_bench --prio 80 --cpu 2 --work-us 0` (손으로) | Pi 4B, RT 커널 + isolcpus 상태 |
 
+| `record_summary_wsl_20261105.md`, `record_rt_status_wsl_20261105.csv` | 기록 파이프라인 첫 실행: 토픽별 Hz·틈, rt_status 29초, 추종 오차 | `data_pipeline/record.sh 30` → `bag_to_csv.py` (MCAP 원본 1.07 MB 는 `build/bags/`, 저장소 제외) | WSL2, MuJoCo 백엔드, 일반 스케줄링 |
+
 규칙: 숫자를 문서에 적을 때는 반드시 이 폴더의 파일 이름을 옆에 적는다. 환경(가상/러너/RT 커널)을 빼고 숫자만 말하지 않는다.
 규칙 2(11/04 추가): Pi 측정은 `.meta` 의 `throttled_after` 가 0 인 것만 표에 올린다. 0 이 아니면 클럭 저하가 섞인 값이라 다시 잰다.

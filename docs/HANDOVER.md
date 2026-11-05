@@ -1,4 +1,4 @@
-# 인수인계 요약 — 2026-11-05 13:00 (D7 — 표① Pi 4 PREEMPT_RT 실측 완료, 실험 상세 페이지 20장)
+# 인수인계 요약 — 2026-11-05 13:00 (D7 — 표① Pi 4 PREEMPT_RT 실측 완료, 기록 파이프라인 첫 실행, 실험 상세 페이지 21장)
 
 새 대화 첫 메시지에 이 파일을 첨부하세요. 저장소는 GitHub 에 있으므로 zip 은 더 이상 필요 없습니다:
 **https://github.com/ohevance/rt-robot-data-infra** (public, main, CI 초록)
@@ -24,7 +24,7 @@
 - **Raspberry Pi 4 Model B 4 GB** (11/04 세팅 완료): Samsung PRO Plus 512 GB 에 Ubuntu Server 24.04.5 64-bit, hostname `pi-rt`, 사용자 `mgoh`, **Wi-Fi** 192.168.45.250(바뀔 수 있음 — 안 되면 공유기에서 `pi-rt` 찾기), SSH 비밀번호. 도구(git·cmake·rt-tests·stress-ng) 설치, 저장소 clone·빌드·ctest 4/4. 커널 `6.8.0-1064-raspi`(일반). 방열판 없음 → 부하 측정 120초. 기존 카드(Raspberry Pi OS 12)는 보관.
 - Ubuntu One 계정 있음(11/05 아침 가입 성공, 전날 밤은 Launchpad time out). Ubuntu Pro 개인 토큰으로 Pi attach 완료 → **커널 `6.8.0-2054-raspi-realtime`, `/sys/kernel/realtime` = 1, `isolcpus=3 nohz_full=3 rcu_nocbs=3` 적용 상태**(되돌리기: `/boot/firmware/cmdline.txt.bak`). 토큰은 채팅 캡처에 한 번 노출됨 — 영상·문서에 넣지 말 것.
 
-## 4. 저장소 상태 (main 8f06d39 + patch-10)
+## 4. 저장소 상태 (main c71a5f2 + patch-12)
 - rt_core: SPSC 링 · RtLoop · ControlStep(최신 명령·워치독·변화량 제한·상태 머신) · RobotStateMachine(표 기반) · SimLagBackend · **MujocoBackend** · jitter_bench · 테스트 4 + MuJoCo 1. ros2_adapter: `backend: sim_lag|mujoco`, rt_status 에 wake_us·work_us·state·backend·rmw.
 - fleet: 에이전트(버퍼·재전송·유언·OTA 적용/롤백·keepalive/QoS 옵션), 수집기(1초 묶음 COPY·DB backlog·지속 세션·곱게 종료·단일 인스턴스 잠금·보관 상태 이벤트 제외), rollout.py(5→50→100% 헬스 게이트·롤백), chaos/inject.py(4종, 장애 직전 seq 기준 유실), assert_results.py, tools/diag.py(A 군집·B 홍수 제외·C seq 틈), db/migrate.py(--wait), 대시보드 14패널, 가짜 브로커·DB 테스트 3개, integration.sh.
 - CI 3잡 초록: rt_core 1m13s · mujoco 25s · fleet_integration 1m52s. checkout/upload-artifact 는 v5 로 올림(58d22cf) — 그 뒤 실행 결과는 `gh run list -L 3` 로 확인할 것.
@@ -45,6 +45,6 @@
 - (완료 11/05) 표① Pi 4 RT 실측 전부. 선택 과제로 남김: 512M 로 cyclictest -S 한 번 더(부하 정의 vs 격리 전후 가르기), 방열판 달고 300 s 부하.
 - **문서 규칙(11/05)**: 채팅에서 한 설명·판단은 같은 날 GLOSSARY/EXPERIMENTS/LOG/DECISIONS 로. 실험이 늘면 `docs/experiments/E##.md` 한 장 + 순서도 상자·마름모 하나.
 - 남은 큰 일: 2분 영상 녹화(대본 `docs/VIDEO_SCRIPT.md` 에 Pi 숫자 반영 필요), 이력서 문장(경력 숫자 5개 미수령), 사용자의 코드 분석 기간(READING_GUIDE 26 + experiments 20장), D9 재직자 접촉 문구.
-- WSL: `data_pipeline/record.sh 30` + `bag_to_csv.py` 첫 실행(rosbag2_py import 확인) · 수집기 `--qos 1`, 가상 장치 `--telemetry-qos 1` 로 되돌리기 · CI(v5 액션) 결과 확인.
+- (완료 11/05) 기록 파이프라인 첫 실행(E20). 남은 WSL 잔일: 수집기 `--qos 1`, 가상 장치 `--telemetry-qos 1` 로 되돌리기(다시 관제를 띄울 때) · CI 초록 확인(`gh run list -L 1`).
 - 문서·마무리: actions v5, README 최종, 2분 영상 대본, 이력서 문장(사용자 경력 숫자 5개 아직 미수령: 시스템 규모·초당 처리량·소켓 프로토콜·관제 주기·DB 일 처리량), D9 재직자 접촉 문구.
 - 보류(면접에서 "다음 단계"로): 수동 ACK(DB 적재 뒤 PUBACK), 중력 보상, ALLEX 프로필, 실물 SO-101.

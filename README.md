@@ -10,7 +10,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 |---|---|---|---|
 | ① 실시간 Linux 미들웨어, ROS 2/DDS | `rt_control/rt_core` RT 루프 + 측정기 + 제어 단계 + 상태 머신, `rt_control/ros2_adapter` ROS 2 노드, `dds_bench` | 표① 지연·지터 (p99.9/max) · 표② DDS 손실·지연 · 노드 `rt_status`(wake/work us, state) | 작성 완료, WSL 실행 확인(노드·DDS). **Pi 4 실측 완료(11/04~05)**: 일반 → PREEMPT_RT → 고정 → 격리, `table1_pi4.md` |
 | ② 실시간 로깅·모니터링·시각화·업데이트 | `fleet` 수집 → TimescaleDB → Grafana(14 패널), OTA 단계 배포·헬스 게이트·자동 롤백, 장애 주입 4종 | 표③-1 처리량·전달 지연 · 표③-2 장애 감지·복구·유실 · 표③-3 OTA 롤백 시간 | 작성 완료(D3~D4), WSL 관제 실행 확인(D2), 장애·OTA 실측 대기 |
-| ③ 센서 스트리밍·로깅·전처리 자동화 | `fleet` 장치 에이전트(가상 50 + RT 노드 1), store-and-forward, 수집기 backlog, QoS 0/1 | 초당 메시지, 전달 지연 p95, 유실 % | 작성 완료 |
+| ③ 센서 스트리밍·로깅·전처리 자동화 | `fleet` 장치 에이전트(가상 50 + RT 노드 1), store-and-forward, 수집기 backlog, QoS 0/1 · **`data_pipeline`** 로봇 안 100 Hz 기록(rosbag2 MCAP) → CSV → 검증 요약 | 초당 메시지, 전달 지연 p95, 유실 % · 기록 실제 Hz·틈·추종 오차 | 작성 완료, WSL 실행 확인(기록 11/05) |
 | ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스) | CI 배지, 테스트 수(C++ 5 · Python 3 · 통합 1), 물리 한 주기 비용 p99 | 작성 완료(D5), WSL/CI 첫 실행 대기 |
 
 ## 숫자 한눈에 (2026-11-04 기준 — 어디서 잰 값인지가 숫자만큼 중요하다)
@@ -29,6 +29,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | MuJoCo 물리 한 주기 비용 p50 / p99 / max | 6.4 / 8.5 / 29.4 us (1 ms 의 0.9%) | GitHub 러너, SO-ARM100 6축 | `mujoco_backend_ci.json` |
 | 같은 것, WSL 단독 / ROS 2 노드 안 `work_us`(제어+물리) | 4.9 / 6.3 / 20.8 us · 41 / 145 / 247 us | WSL2 참고값 | `docs/LOG.md` 11/04 |
 | 물리가 드러낸 중력 처짐 (어깨 Pitch, 목표 −0.200) | −0.180 rad (1.1° 부족) | WSL2, MuJoCo | `docs/LOG.md` 11/04 |
+| 로봇 안 기록 파이프라인 30 s: `/joint_states` 실제 Hz / 틈 / 드롭 | **100.0 Hz / 0 / 0** (2,964행), 요약표에 어깨 처짐 0.019 rad + 팔꿈치 0.009 자동 검출 | WSL2, rosbag2 MCAP → CSV | `record_summary_wsl_20261105.md` |
 | DDS 1 MB 손실: Fast DDS best_effort / Cyclone | 99.8% / 0% | WSL2, rclpy | `table2.md` |
 | 관제 50대 1 Hz 전달 지연 p50 / p95 | 0.9 / 1.8 ms | WSL2 | `table3.md` ③-1 |
 | 브로커 10초 중단 → 전 장치 복귀, 유실 | 2.9초, 0 / 1400 | WSL2 | `table3.md` ③-2 |
