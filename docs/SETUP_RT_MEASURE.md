@@ -1,6 +1,7 @@
 # 표① 실측 — Raspberry Pi 4 Model B (4 GB) + Ubuntu 24.04 + PREEMPT_RT
 
 목표: **실시간 커널에서 재는 표①의 진짜 숫자.** WSL 값은 참고값일 뿐이고, 이 숫자가 포트폴리오의 핵심이다.
+실시간 커널이 일반 커널과 무엇이 다른지는 [`GLOSSARY.md` → PREEMPT_RT](GLOSSARY.md#preempt_rt-실시간-커널-패치) 에 표·비유·면접 한 문장으로 적어 두었다.
 Pi 4B 4 GB 로 충분하다(64-bit Cortex-A72 4코어). 모니터·키보드는 첫 부팅 확인에만 쓰고 이후는 SSH 로 한다.
 11/04 실측으로 1~4단계는 검증됐고(일반 커널 기준값 4줄, `docs/measurements/table1_pi4.md`), 5단계부터가 남았다.
 
