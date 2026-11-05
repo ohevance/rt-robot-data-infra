@@ -70,7 +70,8 @@ case "${1:-0}" in
          "${YELLOW}처음엔 0 이 아니었다 — 측정 맹점을 고치자 53, 원인 셋을 추적해 0 으로${RESET}" ;;
   6) box "장면 6 — CI: push 마다 GitHub 러너가 다시 증명" \
          "rt_core: 빌드 · 단위 테스트 17건 · 1 kHz 연기(드롭 0)" \
-         "→ fleet_integration: 진짜 컨테이너 · 장애 3종 · 롤백 · OTA    → mujoco: 헤드리스 물리" \
+         "→ fleet_integration: 진짜 컨테이너 · 장애 3종 · 롤백 · OTA" \
+         "→ mujoco: MuJoCo 내려받아 빌드 · SO-ARM100 2,000주기 헤드리스" \
          "" \
          "${GREEN}코드와 숫자는 저장소에 — github.com/ohevance/rt-robot-data-infra${RESET}" ;;
   *) echo "장면 번호 0~6"; exit 1 ;;
