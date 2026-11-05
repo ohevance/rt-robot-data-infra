@@ -1,0 +1,19 @@
+{
+  "label": "pi4_rt_stress_pin_work0_p90",
+  "kernel": "6.8.0-2054-raspi-realtime",
+  "preempt_rt": true,
+  "sched_fifo": true,
+  "sched_errno": 0,
+  "mlockall": true,
+  "mlock_errno": 0,
+  "cpu_pin": 2,
+  "period_us": 1000,
+  "seconds": 60.000,
+  "work_us": 0,
+  "iterations": 60000,
+  "samples": 60000,
+  "drops": 0,
+  "wake_us": {"min": 17.170, "avg": 27.724, "p50": 22.709, "p99": 124.204, "p999": 211.158, "max": 289.698, "n": 60000},
+  "period_err_us": {"min": -241.641, "avg": -0.000, "p50": -0.149, "p99": 64.144, "p999": 157.382, "max": 267.488, "n": 59999},
+  "work_us_stats": {"min": 0.129, "avg": 0.177, "p50": 0.148, "p99": 0.851, "p999": 1.722, "max": 3.833, "n": 60000}
+}

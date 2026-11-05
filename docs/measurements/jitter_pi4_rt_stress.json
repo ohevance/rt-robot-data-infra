@@ -1,0 +1,19 @@
+{
+  "label": "pi4_rt_stress",
+  "kernel": "6.8.0-2054-raspi-realtime",
+  "preempt_rt": true,
+  "sched_fifo": true,
+  "sched_errno": 0,
+  "mlockall": true,
+  "mlock_errno": 0,
+  "cpu_pin": -1,
+  "period_us": 1000,
+  "seconds": 60.000,
+  "work_us": 50,
+  "iterations": 60000,
+  "samples": 60000,
+  "drops": 0,
+  "wake_us": {"min": 16.341, "avg": 41.949, "p50": 26.142, "p99": 185.198, "p999": 241.541, "max": 300.635, "n": 60000},
+  "period_err_us": {"min": -219.918, "avg": 0.001, "p50": -0.393, "p99": 145.318, "p999": 209.021, "max": 271.369, "n": 59999},
+  "work_us_stats": {"min": 50.092, "avg": 51.343, "p50": 50.148, "p99": 67.480, "p999": 76.258, "max": 97.683, "n": 60000}
+}

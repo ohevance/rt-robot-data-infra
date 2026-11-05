@@ -1,0 +1,10 @@
+label=pi4_rt_stress_isol
+date=2026-11-05T11:10:03+09:00
+kernel=6.8.0-2054-raspi-realtime
+realtime=1
+duration_s=60
+stress=stress
+cpu=3
+temp_before_mC=44790
+temp_after_mC=64757
+throttled_after=0

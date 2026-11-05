@@ -1,0 +1,11 @@
+label=pi4_rt_stress_S_p80_vm256
+date=2026-11-05T12:18:00+09:00
+kernel=6.8.0-2054-raspi-realtime
+realtime=1
+duration_s=60
+stress=stress
+cpus=3
+note=E19-d C: cyclictest -S -p 80, isolcpus=3 상태(CPU 3 제외), vm 256M
+temp_before_mC=na
+temp_after_mC=71575
+throttled_after=0

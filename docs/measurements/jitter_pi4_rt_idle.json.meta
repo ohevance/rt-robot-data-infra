@@ -1,0 +1,10 @@
+label=pi4_rt_idle
+date=2026-11-05T10:49:01+09:00
+kernel=6.8.0-2054-raspi-realtime
+realtime=1
+duration_s=60
+stress=idle
+cpu=none
+temp_before_mC=42842
+temp_after_mC=45277
+throttled_after=0
