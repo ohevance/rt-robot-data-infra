@@ -30,6 +30,7 @@
 - CI 3잡 초록: rt_core 1m13s · mujoco 25s · fleet_integration 1m52s. checkout/upload-artifact 는 v5 로 올림(58d22cf) — 그 뒤 실행 결과는 `gh run list -L 3` 로 확인할 것.
 - 측정 스크립트(11/04 밤): `scripts/lib_thermal.sh`(온도·스로틀), `cyclictest_run.sh`(.meta 에 온도 기록), 새 `jitter_run.sh`(라벨·초·stress·cpu 한 줄), `make_table1.py` 가 .meta 를 읽어 비고에 온도/스로틀 표시. `docs/measurements/table1_pi4.md`(일반 커널 4줄).
 - docs: README "숫자 한눈에"(환경 표기, Pi 일반 커널 2줄 포함), measurements/README.md 색인, LOG 11/03~11/04 밤까지, DECISIONS 14건+, GLOSSARY, READING_GUIDE 26항목, **EXPERIMENTS.md**(실험 19건 + 사고 9건 한 표), VIDEO_SCRIPT, RESUME_LINES, SETUP_RT_MEASURE(1~4단계 검증 완료 표시).
+- **발표 장표(11/05 오후)**: `docs/deck/rt-robot-data-infra.pptx` 138장(순서도 논리: 로봇을 움직이는 과정 먼저, 핵심 소스 코드 파일:줄, 시험·검증은 3부에 번호로, 도형 그림 9장·순서도 30장) + 장표마다 설명 문서 `docs/deck/notes/NNN.docx`(원본 `notes_md/`). 생성 코드 `docs/deck/build/`(`./build.sh` 로 다시 만든다, 코드 장표 줄 번호는 `content_*.py`). 읽는 법·발표하는 법은 `docs/deck/README.md`.
 
 ## 5. 측정값 요약 (환경 표기 필수)
 - RT 루프(WSL 참고값): 1 kHz 드롭 0, 노드 wake p99 278~352 / max 679~2026 us, SCHED_FIFO 는 p50 92→37 us(꼬리 그대로).
@@ -44,7 +45,8 @@
 - (완료) 소실험 2개 — keepalive 박자 확정(30 s: 0회 / 10 s: 10.0 s 간격), QoS 0 유실 508/1312.
 - (완료 11/05) 표① Pi 4 RT 실측 전부. 선택 과제로 남김: 512M 로 cyclictest -S 한 번 더(부하 정의 vs 격리 전후 가르기), 방열판 달고 300 s 부하.
 - **문서 규칙(11/05)**: 채팅에서 한 설명·판단은 같은 날 GLOSSARY/EXPERIMENTS/LOG/DECISIONS 로. 실험이 늘면 `docs/experiments/E##.md` 한 장 + 순서도 상자·마름모 하나.
-- 남은 큰 일: 2분 영상 녹화(대본 `docs/VIDEO_SCRIPT.md` 에 Pi 숫자 반영 필요), 이력서 문장(경력 숫자 5개 미수령), 사용자의 코드 분석 기간(READING_GUIDE 26 + experiments 20장), D9 재직자 접촉 문구.
+- 남은 큰 일: 2분 영상 녹화(대본 `docs/VIDEO_SCRIPT.md` 에 Pi 숫자 반영 필요), 이력서 문장(경력 숫자 5개 미수령), 사용자의 코드 분석 기간(**장표 `docs/deck/` 138장 + 설명 문서로** — READING_GUIDE 26 + experiments 20장은 보조), D9 재직자 접촉 문구. 분석 중 막히는 장표는 `notes_md/NNN.md` 를 고치고 `build/make_notes.sh` 로 docx 재생성.
 - (완료 11/05) 기록 파이프라인 첫 실행(E20). 남은 WSL 잔일: 수집기 `--qos 1`, 가상 장치 `--telemetry-qos 1` 로 되돌리기(다시 관제를 띄울 때) · CI 초록 확인(`gh run list -L 1`).
 - 문서·마무리: actions v5, README 최종, 2분 영상 대본, 이력서 문장(사용자 경력 숫자 5개 아직 미수령: 시스템 규모·초당 처리량·소켓 프로토콜·관제 주기·DB 일 처리량), D9 재직자 접촉 문구.
 - 보류(면접에서 "다음 단계"로): 수동 ACK(DB 적재 뒤 PUBACK), 중력 보상, ALLEX 프로필, 실물 SO-101.
+- 잔일(11/05 장표 작업 중 발견): `docs/measurements/table3.md` 표③-1(최근 60분 집계)이 장애 실험 구간을 포함해 '초당 메시지 최대 20000 · 전달 지연 max 5,603,338 ms · 유실 −130%' 처럼 깨진 값이다 — 관제를 깨끗이 10분 돌린 뒤 `python3 scripts/make_table3.py --minutes 10` 으로 다시 만들 것(장표는 p50/p95 1/2 ms 만 인용). LOG 11/05 의 '단위 테스트 7개' 는 5개(스모크 추가 전)로 정정.

@@ -9,9 +9,9 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | 직무 요구 | 산출물 | 수치 | 상태 |
 |---|---|---|---|
 | ① 실시간 Linux 미들웨어, ROS 2/DDS | `rt_control/rt_core` RT 루프 + 측정기 + 제어 단계 + 상태 머신, `rt_control/ros2_adapter` ROS 2 노드, `dds_bench` | 표① 지연·지터 (p99.9/max) · 표② DDS 손실·지연 · 노드 `rt_status`(wake/work us, state) | 작성 완료, WSL 실행 확인(노드·DDS). **Pi 4 실측 완료(11/04~05)**: 일반 → PREEMPT_RT → 고정 → 격리, `table1_pi4.md` |
-| ② 실시간 로깅·모니터링·시각화·업데이트 | `fleet` 수집 → TimescaleDB → Grafana(14 패널), OTA 단계 배포·헬스 게이트·자동 롤백, 장애 주입 4종 | 표③-1 처리량·전달 지연 · 표③-2 장애 감지·복구·유실 · 표③-3 OTA 롤백 시간 | 작성 완료(D3~D4), WSL 관제 실행 확인(D2), 장애·OTA 실측 대기 |
+| ② 실시간 로깅·모니터링·시각화·업데이트 | `fleet` 수집 → TimescaleDB → Grafana(14 패널), OTA 단계 배포·헬스 게이트·자동 롤백, 장애 주입 4종 | 표③-1 처리량·전달 지연 · 표③-2 장애 감지·복구·유실 · 표③-3 OTA 롤백 시간 | 완료 — WSL 실측(11/04 표③-2·③-3), CI 러너에서도 매 push 재실행 |
 | ③ 센서 스트리밍·로깅·전처리 자동화 | `fleet` 장치 에이전트(가상 50 + RT 노드 1), store-and-forward, 수집기 backlog, QoS 0/1 · **`data_pipeline`** 로봇 안 100 Hz 기록(rosbag2 MCAP) → CSV → 검증 요약 | 초당 메시지, 전달 지연 p95, 유실 % · 기록 실제 Hz·틈·추종 오차 | 작성 완료, WSL 실행 확인(기록 11/05) |
-| ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스) | CI 배지, 테스트 수(C++ 5 · Python 3 · 통합 1), 물리 한 주기 비용 p99 | 작성 완료(D5), WSL/CI 첫 실행 대기 |
+| ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스) | CI 배지, 테스트 수(C++ 5 · Python 15 · 통합 1), 물리 한 주기 비용 p99 | 완료, CI 초록 |
 
 ## 숫자 한눈에 (2026-11-04 기준 — 어디서 잰 값인지가 숫자만큼 중요하다)
 
@@ -63,6 +63,7 @@ python3 fleet/tests/test_fleet_logic.py && python3 fleet/tests/test_ota_rollout.
 관제·OTA·장애 주입(도커 필요): [`fleet/README.md`](fleet/README.md). MuJoCo: [`backends/mujoco/README.md`](backends/mujoco/README.md).
 
 ## 문서
+- **발표 장표 138장 + 장표마다 설명 문서 1개**(순서도 논리: 로봇을 움직이는 10단계(왕초보 바탕 → 핵심 코드 파일:줄) → 데이터의 길 → 검증 → 공고와 숫자 → 환경 → 어떻게 믿나 → 왜 이렇게 → 결국 로봇은 이렇게 움직인다): [`docs/deck/README.md`](docs/deck/README.md) · 장표 목록 [`docs/deck/SLIDES.md`](docs/deck/SLIDES.md)
 - **전체 환경 지도**(개발 PC · Pi · GitHub/CI · 작성 작업본 — 무엇이 어디서 돌고, 언제 움직이고, 결과를 어떻게 읽나): [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)
 - 코드를 읽는 순서: [`docs/READING_GUIDE.md`](docs/READING_GUIDE.md)
 - 구조: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
