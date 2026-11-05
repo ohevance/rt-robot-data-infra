@@ -12,12 +12,12 @@ bash docs/video/cue.sh 0
 bash docs/video/cue.sh 1
 : ==== 장면 2 표① — Pi 실측 ====
 bash docs/video/cue.sh 2
-ssh mgoh@192.168.45.250 'uname -r; echo realtime=$(cat /sys/kernel/realtime); echo isolated=$(cat /sys/devices/system/cpu/isolated)'
-grep -E '^\| (pi4_generic_stress|pi4_rt_stress|pi4_rt_stress_isol) ' docs/measurements/table1_pi4.md | cut -d'|' -f2,3,5,6,10,11,12
+ssh pi-rt 'uname -r; cat /sys/kernel/realtime'
+bash docs/video/table1_key.sh
 ./build/rt_core/jitter_bench --no-rt --seconds 3
 : ==== 장면 3 노드 + MuJoCo + 기록 ====
 bash docs/video/cue.sh 3
-ros2 topic echo /rt_status --full-length --once
+ros2 topic echo /rt_status std_msgs/msg/String --full-length --once
 ros2 topic echo /joint_states --once --field position
 cat docs/measurements/record_summary_wsl_20261105.md
 : ==== 장면 4 관제 + OTA (Grafana 와 번갈아) ====
@@ -25,8 +25,7 @@ bash docs/video/cue.sh 4
 python3 fleet/ota/rollout.py --version 1.2.0-bad --bad --apply-s 1 --health-wait 3
 : ==== 장면 5 장애 주입 ====
 bash docs/video/cue.sh 5
-python3 fleet/chaos/inject.py --fault broker --duration 5 --settle 5 --label video
-python3 -c "import json;d=json.load(open('docs/measurements/fault_broker_video.json'));print('전 장치 복귀', d['recover_all_devices_s'], '초 / 유실', d['loss']['lost'], '/', d['loss']['expected'])"
+python3 fleet/chaos/inject.py --fault broker --duration 5 --settle 5
 : ==== 장면 6 CI (브라우저 Actions 탭) ====
 bash docs/video/cue.sh 6
 gh run list -L 3

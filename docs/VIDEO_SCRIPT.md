@@ -1,7 +1,8 @@
 # 2분 영상 대본 (v2, 2026-11-05) — 화면 + 터미널 자막 상자 + 합성 음성(TTS)
 
 목적: 공고 4항목을 **돌아가는 화면과 숫자**로 2분 안에. 얼굴·육성 없음. 내레이션은 Clipchamp 의 "텍스트 음성 변환"(한국어 음성)으로 아래 문장을 그대로 붙여 넣어 만든다.
-자막은 편집기에서 얹지 않는다 — 장면마다 터미널에서 `bash docs/video/cue.sh <N>` 을 치면 **자막 상자**(제목 + 핵심 숫자)가 뜬다. 치는 명령은 `docs/video/cues.sh`(history 로 불러 씀).
+자막은 편집기에서 얹지 않는다 — 장면마다 터미널에서 `bash docs/video/cue.sh <N>` 을 치면 **자막 상자**(제목 + 핵심 숫자)가 뜬다.
+**녹화는 원테이크, 명령은 사람이 직접 타이핑한다**(데모답게). 순서표는 `docs/video/CHEATSHEET.md`(휴대폰·인쇄용, 화면에 클로드 창을 띄우지 않기 위해). 긴 명령 둘은 짧은 도우미로: `bash docs/video/table1_key.sh`(표① 핵심 5줄), `ssh pi-rt`(~/.ssh/config 별칭). 환경 점검은 `bash docs/video/run.sh all`(자동, 녹화엔 안 씀).
 총 2:00, 장면 6개 + 제목 카드. 내레이션 전체 약 770자(공백 포함) — TTS 1.0 배속이면 약 2분 15초. 2:00 에 맞추려면 Clipchamp 에서 음성 속도 1.15, 또는 장면 5 의 "처음엔 0 이 아니었습니다…" 두 문장을 빼고 자막 상자에만 남긴다.
 
 ## 녹화 전 체크리스트 (15분) — 창을 이렇게 띄운다
@@ -11,14 +12,14 @@
 | [WSL B] 가상 장치 | `python3 fleet/agent/virtual_fleet.py --count 50 --rate 1 --telemetry-qos 1 --keepalive 30` | 조용히 돈다 |
 | [WSL C] 노드 | `pkill -f rt_control_node; ros2 daemon stop; ./install/rt_control_ros2/lib/rt_control_ros2/rt_control_node --ros-args --params-file rt_control/ros2_adapter/config/so101_mujoco.params.yaml` | `backend=mujoco dof=6 loop=1000 Hz` |
 | [WSL D] 명령 50 Hz | `ros2 topic pub -r 50 /joint_command sensor_msgs/msg/JointState "{position: [0.3, -0.2, 0.1, 0.0, 0.0, 0.5]}"` | 조용히 돈다 |
-| **[WSL E] 녹화 창** | 글꼴 20pt, 창 크기 1600×900 쯤, 어두운 배경. `history -r docs/video/cues.sh` | ↑ 로 명령이 나온다 |
+| **[WSL E] 녹화 창** | 최대화, 글꼴 20pt 이상(`Ctrl` + `+`), 어두운 배경. 옆에 CHEATSHEET | `bash docs/video/cue.sh 0` 상자가 또렷하게 |
 | 브라우저 탭 1 | `http://localhost:3000` Grafana "Fleet Overview", Last 5 minutes, 자동 새로고침 5 s | 초당 메시지 ≈ 50, 온라인 50 |
 | 브라우저 탭 2 | `https://github.com/ohevance/rt-robot-data-infra` README (숫자 한눈에 표가 보이게) | 배지 초록 |
 | 브라우저 탭 3 | 같은 저장소 → Actions | 마지막 run ✓ |
 | Pi (선택) | 전원 켜 두기 → [WSL E] 에서 `ssh mgoh@192.168.45.250 true` 로 비밀번호 한 번 입력해 두기(녹화 중 또 묻지 않게 하려면 `ssh-copy-id mgoh@192.168.45.250`) | `uname -r` 에 realtime |
-| 녹화 도구 | Windows 캡처 도구(Win+Shift+S → 동영상) 영역을 녹화 창에 맞춤, 또는 OBS 전체 화면 | 시험 녹화 5초 |
+| 녹화 도구 | `Win + Shift + R`(캡처 도구 동영상) → 전체 화면 → 시작. 원테이크(한 파일) | 시험 녹화 5초 |
 
-장면 하나당 파일 하나로 찍는다(`scene2.mp4` …). 실수하면 그 장면만 다시. 명령 출력이 길면 스크롤하지 말고 그 자리에서 잠깐(3초) 멈춘다 — 편집 때 자르기 쉽다.
+원테이크로 찍는다(파일 하나). 틀리면 그 자리에서 다시 치고 계속 — 편집에서 잘라 낸다. 명령 출력이 끝나면 3초 멈춘다(자르기 쉽게).
 
 ## 장면 0 — 0:00~0:08 — 제목 카드
 화면: [WSL E] `bash docs/video/cue.sh 0` (상자만 8초).
@@ -49,8 +50,8 @@ TTS: "브로커를 죽이면 장치가 버퍼에 모았다가 재전송하고, �
 TTS: "푸시할 때마다 러너가 루프와 물리, 장애 주입과 롤백을 다시 돌립니다. 코드와 숫자는 저장소에 있습니다."
 
 ## 편집 (Clipchamp, 30분)
-1. 새 프로젝트 1080p → `scene0.mp4` ~ `scene6.mp4` 를 순서대로 타임라인에.
-2. 각 클립 앞뒤 자르기. 장면 5 의 20초 대기는 **속도 2배**(클립 선택 → 속도).
+1. 새 프로젝트 1080p → 원테이크 파일 하나를 타임라인에.
+2. 틀린 구간·긴 대기 자르기(분할 → 삭제). 장면 5 의 20초 대기는 **속도 2배**(구간 분할 → 속도).
 3. **텍스트 음성 변환**: 왼쪽 "녹음 및 만들기" → 텍스트 음성 변환 → 한국어 → 음성 선택 → 위 TTS 문장을 장면별로 붙여 넣기 → 생성 → 해당 장면 시작에 맞춰 놓기. 속도 1.0, 피치 기본.
 4. 자막은 터미널 상자가 이미 있으므로 넣지 않는다(브라우저 장면 1·4·6 에만 숫자 자막 한 줄 허용: "유실 0 / 1400", "롤백 1.0초 · 3/50").
 5. 내보내기 1080p → YouTube **미등록(unlisted)** 업로드 → 링크를 README 맨 위와 이력서에.
