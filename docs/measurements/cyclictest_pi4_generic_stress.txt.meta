@@ -8,3 +8,4 @@ cpus=4
 temp_before_mC=50147
 temp_after_mC=74984
 throttled_after=0
+stress_vm_bytes=512M

@@ -8,3 +8,6 @@ cpu=3
 temp_before_mC=51121
 temp_after_mC=74010
 throttled_after=0
+stress_vm_bytes=256M
+prio=80
+work_us=50

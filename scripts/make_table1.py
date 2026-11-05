@@ -52,6 +52,22 @@ def _mc_to_c(text):
         return None
 
 
+def load_note(meta):
+    """부하 정의(vm 버퍼 크기)와 jitter_bench 의 prio·work 를 비고에. 11/05 에 두 도구의 부하가 달랐던 것을 뒤늦게 알아 추가"""
+    parts = []
+    if meta.get("stress_vm_bytes"):
+        parts.append("vm " + meta["stress_vm_bytes"])
+    if meta.get("prio"):
+        parts.append("prio " + meta["prio"])
+    if meta.get("work_us"):
+        parts.append("work " + meta["work_us"] + " us")
+    if meta.get("note"):
+        parts.append(meta["note"])
+    if not parts:
+        return ""
+    return " · " + ", ".join(parts)
+
+
 def thermal_note(meta):
     """온도·스로틀을 비고에 붙일 문자열. 스로틀 플래그가 0 이 아니면 경고 — 그 줄의 수치는 클럭 저하가 섞였을 수 있다"""
     before = _mc_to_c(meta.get("temp_before_mC"))
@@ -118,7 +134,7 @@ def parse_cyclictest(path):
         "p999": p999,
         "max": max(maxs) if maxs else 0,
         "overflow": sum(overflows) if overflows else 0,
-        "note": f"{len(per_cpu_hist)} CPU, worst-CPU values" + thermal_note(meta),
+        "note": f"{len(per_cpu_hist)} CPU, worst-CPU values" + load_note(meta) + thermal_note(meta),
     }
 
 
@@ -137,7 +153,7 @@ def parse_jitter(path):
         "overflow": j.get("drops", 0),
         "note": "SCHED_FIFO={} mlockall={} cpu_pin={} period={}us".format(
             "ok" if j.get("sched_fifo") else "no", "ok" if j.get("mlockall") else "no",
-            j.get("cpu_pin", -1), j.get("period_us", "?")) + thermal_note(meta),
+            j.get("cpu_pin", -1), j.get("period_us", "?")) + load_note(meta) + thermal_note(meta),
     }
 
 

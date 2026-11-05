@@ -12,6 +12,8 @@
 #   예) sudo scripts/jitter_run.sh pi4_rt_idle       60
 #       sudo scripts/jitter_run.sh pi4_rt_stress     60 stress
 #       sudo scripts/jitter_run.sh pi4_rt_stress_pin 60 stress 3      # RT 스레드를 CPU 3 에 고정
+#   환경 변수로 바꾸는 것: JITTER_PRIO(기본 80) · JITTER_WORK_US(기본 50; 0 이면 깨기만) · STRESS_VM_BYTES(기본 256M)
+#       예) JITTER_WORK_US=0 sudo -E scripts/jitter_run.sh pi4_rt_stress_pin_work0 60 stress 2
 #
 # 읽는 순서: 인자 → 빌드 확인 → (부하 시작) → jitter_bench → 메타 기록 → 요약
 # ---------------------------------------------------------------------------
@@ -24,12 +26,16 @@ CPU="${4:-}"
 OUTDIR="docs/measurements"
 JSON="${OUTDIR}/jitter_${LABEL}.json"
 BENCH="build/rt_core/jitter_bench"
-PRIO=80                     # SCHED_FIFO 우선순위. cyclictest(90)보다 낮게 두어 둘을 같이 돌려도 cyclictest 가 기준
+PRIO="${JITTER_PRIO:-80}"   # SCHED_FIFO 우선순위. 11/05 확인: 80 과 90 은 결과가 같다(E19-d B)
+WORK_US="${JITTER_WORK_US:-50}"   # 매 주기 바쁘게 일하는 시간. 0 으로 두면 cyclictest 처럼 "깨기만" 한다(E19-d A)
 STRESS_HEADROOM_S=15        # 부하는 측정보다 이만큼 길게 (측정 끝까지 부하가 유지되도록)
 mkdir -p "${OUTDIR}"
 
 # shellcheck source=scripts/lib_thermal.sh
 source "$(dirname "$0")/lib_thermal.sh"
+# shellcheck source=scripts/lib_stress.sh
+source "$(dirname "$0")/lib_stress.sh"
+VM_BYTES="${STRESS_VM_BYTES:-256M}"     # 이 스크립트가 11/04~05 에 쓴 값. cyclictest_run.sh 는 512M — 비교할 때 .meta 를 본다
 
 if [ ! -x "${BENCH}" ]; then
   echo "${BENCH} 가 없습니다. 먼저 빌드:  cmake -S rt_control/rt_core -B build/rt_core -DCMAKE_BUILD_TYPE=Release && cmake --build build/rt_core -j4" >&2
@@ -43,20 +49,14 @@ fi
 
 TEMP_BEFORE="$(read_temp_mc)"
 
-SPID=""
 if [ "${STRESS}" = "stress" ]; then
-  if ! command -v stress-ng >/dev/null; then
-    echo "stress-ng 가 없습니다:  sudo apt install stress-ng" >&2; exit 1
-  fi
-  # 11/04 일반 커널 기준값을 손으로 돌릴 때 쓴 것과 같은 부하(CPU 전부 + I/O 2 + 메모리 256M) — RT 결과와 비교가 되도록 바꾸지 않는다
-  stress-ng --cpu "$(nproc)" --io 2 --vm 1 --vm-bytes 256M --timeout "$((DUR + STRESS_HEADROOM_S))s" >/dev/null 2>&1 &
-  SPID=$!
-  sleep 3
+  # 부하 정의는 lib_stress.sh 한 곳 (11/04 일반 커널 기준값과 같은 256M 이 기본)
+  start_stress "$((DUR + STRESS_HEADROOM_S))" "${VM_BYTES}" || exit 1
 fi
 
-"${BENCH}" --prio "${PRIO}" --seconds "${DUR}" --label "${LABEL}" --json "${JSON}" "${CPU_ARGS[@]}"
+"${BENCH}" --prio "${PRIO}" --seconds "${DUR}" --work-us "${WORK_US}" --label "${LABEL}" --json "${JSON}" "${CPU_ARGS[@]}"
 
-if [ -n "${SPID}" ]; then wait "${SPID}" 2>/dev/null || true; fi
+stop_stress
 
 {
   echo "label=${LABEL}"
@@ -65,7 +65,10 @@ if [ -n "${SPID}" ]; then wait "${SPID}" 2>/dev/null || true; fi
   echo "realtime=$(cat /sys/kernel/realtime 2>/dev/null || echo 0)"
   echo "duration_s=${DUR}"
   echo "stress=${STRESS}"
+  echo "stress_vm_bytes=${VM_BYTES}"
   echo "cpu=${CPU:-none}"
+  echo "prio=${PRIO}"
+  echo "work_us=${WORK_US}"
   thermal_meta_lines "${TEMP_BEFORE}"
 } > "${JSON}.meta"
 

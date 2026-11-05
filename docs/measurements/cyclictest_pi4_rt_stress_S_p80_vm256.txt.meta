@@ -9,3 +9,4 @@ note=E19-d C: cyclictest -S -p 80, isolcpus=3 상태(CPU 3 제외), vm 256M
 temp_before_mC=na
 temp_after_mC=71575
 throttled_after=0
+stress_vm_bytes=256M

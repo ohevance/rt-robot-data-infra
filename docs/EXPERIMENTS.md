@@ -8,7 +8,7 @@
 
 사각형은 실험(번호는 아래 표), **마름모는 결과에 들이댄 기준(합격선)**, 화살표의 글은 그 기준에 대한 답이다.
 실험은 미리 짠 목록이 아니라 **기준을 못 넘을 때마다 "왜?"를 하나 더 묻는 식**으로 생겼다. 기준을 넘은 가지는 거기서 끝난다.
-(GitHub 에서 그림으로 보인다. 글로만 보면: 표① `E01 ✗ → E02 ✗ → E18 ✗ → E19-a ✗ → E19-b ✗ → E19-c ✓`, 곁가지 `E19-a 도구 불일치 → E19-d`; 표② `E04 작은 크기 ✓ → 1 MB ✗ → Cyclone ✓`; 표③ `E05 ✓ → E06 ✗(증거 불일치) → E07 → E08 ✓ → E13 ✓`, 곁가지 `E09·E10·E11·E12`.)
+(GitHub 에서 그림으로 보인다. 글로만 보면: 표① `E01 ✗ → E02 ✗ → E18 ✗ → E19-a ✗ → E19-b ✗ → E19-c ✓`, 곁가지 `E19-a 도구 불일치 → E19-d ✓(측정기 일치 274≈270)`; 표② `E04 작은 크기 ✓ → 1 MB ✗ → Cyclone ✓`; 표③ `E05 ✓ → E06 ✗(증거 불일치) → E07 → E08 ✓ → E13 ✓`, 곁가지 `E09·E10·E11·E12`.)
 각 실험의 상세 페이지(왜 했나 · 결과 · 처음 읽는 사람을 위한 분석)는 [`experiments/`](experiments/README.md) 에 하나씩 있다.
 
 ### 표① 실시간 지연 — 합격선: 부하 중 max < 200 us, 한가/부하 차이 작음, 두 도구가 같은 급
@@ -33,9 +33,13 @@ flowchart TD
   E19c --> C19c{"부하 max < 200?<br/>일하는 동안 안 밀리나?"}
   C19c -->|"예: 189, work max 135 → 53 ✓ (잔여 189 = Pi 4 바닥)"| OK1(["표① 통과 — 1 ms 예산의 19%"])
   E19a --> C19t{"표준 도구와 내 측정기가 같은 급인가? (±30%)"}
-  C19t -->|"아니오: cyclictest 132 vs jitter_bench 301"| E19d["E19-d 가설: 50 us 일하는 동안의 노출<br/>→ --work-us 0 으로 같은 부하"]
+  C19t -->|"아니오: cyclictest 132 vs jitter_bench 301"| E19d["E19-d 도구 불일치 검증: 가설 '50 us 일하는 동안의 노출'<br/>→ --work-us 0 으로 같은 부하"]
   E19d --> C19d{"work 0 이면 ~130 으로 내려오나?"}
-  C19d -->|"(측정 대기)"| X19d(["예 → 가설 확정 · 아니오 → 측정기 점검"])
+  C19d -->|"아니오: 270 (p99 만 169→116) → 가설 기각"| E19d2["같은 설정(1 스레드·CPU 2·prio 80)의 cyclictest"]
+  E19d2 --> C19d2{"두 도구가 같은 값?"}
+  C19d2 -->|"예: 274 vs 270 ✓ 측정기는 맞다"| E19d3["남은 차이의 출처: prio 90? CPU 마다 스레드(-S)? 부하 512M?"]
+  E19d3 --> C19d3{"prio 90 → ? · -S(256M) → ?"}
+  C19d3 -->|"prio 무관(290) · -S 로 210 · 나머지 ≈ 부하 정의(512M, 격리 전) 추정"| OK1d(["닫힘 — 두 스크립트의 부하를 lib_stress.sh 한 곳으로"])
 ```
 
 ### 표② DDS — 합격선: 1 MB 메시지도 손실 0
@@ -95,7 +99,7 @@ flowchart TD
 | [E15](experiments/E15.md) | 물리 시뮬레이션(MuJoCo, SO-ARM100 6축) 한 주기 비용이 1 ms 예산의 얼마인가? | `test_mujoco_backend` 2,000주기 · 노드 안 `work_us` | 러너 p50 6.4 / p99 8.5 / max 29.4 us(예산의 0.9%) · WSL 단독 4.9 / 6.3 / 20.8 · 노드 안(제어+물리) 41 / 145 / 247 us | GitHub 러너 · WSL2 | `mujoco_backend_ci.json`, LOG | 11/04 CI 2차 · MuJoCo WSL |
 | [E16](experiments/E16.md) | 물리가 있으면 SimLag 로는 못 보는 무엇이 보이나? | 목표 [0.3, −0.2, 0.1, 0, 0, 0.5] 를 주고 정상 상태 위치 읽기 | 어깨 Pitch 만 −0.180 (목표 −0.200, **1.1° 처짐**) = 중력에 걸린 position 액추에이터의 정상 상태 오차 → 중력 보상이 필요한 숫자 근거 | WSL2, MuJoCo | LOG | 11/04 MuJoCo WSL |
 | [E18](experiments/E18.md) | **Pi 4 일반 커널**(6.8 raspi)의 지연 꼬리는? — RT 비교의 "전" | `jitter_bench --prio 80` 60 s · `cyclictest` 4 CPU 300 s / 120 s, 한가·부하 | jitter max **24.9 / 781.2** us · cyclictest max **376 / 695** us(p99.9 57 / 118). 한가해도 5분 창에선 376. 부하 중 `work time` max 134.9 — 일하다 밀림. 온도 45→75 °C, 스로틀 0 | **Pi 4B**, Ubuntu 24.04, RT 아님 | `table1_pi4.md`, `*_pi4_generic_*` | 11/04 밤 |
-| [E19](experiments/E19a.md) (a·[b](experiments/E19b.md)·[c](experiments/E19c.md)·[d](experiments/E19d.md)) | PREEMPT_RT 가 E18 의 max 를 얼마로 줄이나? CPU 고정·isolcpus 는? 두 도구가 같은 급인가? | 같은 4조건 + `--cpu 3` + `isolcpus=3` + `--work-us 0` | cyclictest max 한가 **37**(376→) / 부하 **132**(695→). jitter 부하 max **781 → 301**(RT) → 311(고정, 효과 없음) → **189**(격리), work max 135 → 53. 비용: p99 146 → 185. 도구 불일치 2.3배 → work-us 0 검증(E19-d, 측정 대기) | **Pi 4B**, `6.8.0-2054-raspi-realtime`, 스로틀 0 | `*_pi4_rt_*`, `table1_pi4.md` | 11/05 |
+| [E19](experiments/E19a.md) (a·[b](experiments/E19b.md)·[c](experiments/E19c.md)·[d](experiments/E19d.md)) | PREEMPT_RT 가 E18 의 max 를 얼마로 줄이나? CPU 고정·isolcpus 는? 두 도구가 같은 급인가? | 같은 4조건 + `--cpu 3` + `isolcpus=3` + 도구 맞추기 4회(일 0 · 같은 설정 cyclictest · prio 90 · -S 256M) | cyclictest max 한가 **37**(376→) / 부하 **132**(695→). jitter 부하 max **781 → 301**(RT) → 311(고정, 효과 없음) → **189**(격리), work max 135 → 53. 비용: p99 146 → 185. 도구 불일치 2.3배 → E19-d: 일 0 이어도 270(가설 기각), 같은 설정 cyclictest **274 ≈ 270**(측정기 맞음), -S 로 210, 나머지는 부하 정의(512M vs 256M, 추정) | **Pi 4B**, `6.8.0-2054-raspi-realtime`, 스로틀 0 | `*_pi4_rt_*`, `table1_pi4.md` | 11/05 |
 
 ## 2. DDS (표②)
 

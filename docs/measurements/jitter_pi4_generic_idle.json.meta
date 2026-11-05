@@ -8,3 +8,6 @@ cpu=none
 temp_before_mC=45277
 temp_after_mC=na
 throttled_after=0
+stress_vm_bytes=256M
+prio=80
+work_us=50

@@ -25,6 +25,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | **Pi 4 PREEMPT_RT**, 같은 cyclictest max 한가 / 부하 | **37 / 132 us** (일반 376 / 695 의 1/10 · 1/5) | Pi 4B `6.8.0-2054-raspi-realtime`, 스로틀 0 | `table1_pi4.md` |
 | 부하 중 jitter_bench max: 일반 → RT → +CPU 3 고정 → +isolcpus=3 | **781 → 301 → 311 → 189 us** (work max 135 → 98 → 86 → 53) | Pi 4B | `table1_pi4.md`, `docs/experiments/E19a~c.md` |
 | RT 커널의 비용 (숨기지 않는 줄) | 부하 p99 146 → **185** us — 최악은 잘리고 보통 나쁜 경우는 조금 나빠진다 | Pi 4B | `docs/experiments/E19a.md` |
+| 내 측정기 vs 표준 도구(cyclictest), **같은 설정**으로 맞췄을 때 | **270 vs 274 us** (처음 2.3배 차이의 원인은 스레드 배치·부하 정의) | Pi 4B RT | `docs/experiments/E19d.md` |
 | MuJoCo 물리 한 주기 비용 p50 / p99 / max | 6.4 / 8.5 / 29.4 us (1 ms 의 0.9%) | GitHub 러너, SO-ARM100 6축 | `mujoco_backend_ci.json` |
 | 같은 것, WSL 단독 / ROS 2 노드 안 `work_us`(제어+물리) | 4.9 / 6.3 / 20.8 us · 41 / 145 / 247 us | WSL2 참고값 | `docs/LOG.md` 11/04 |
 | 물리가 드러낸 중력 처짐 (어깨 Pitch, 목표 −0.200) | −0.180 rad (1.1° 부족) | WSL2, MuJoCo | `docs/LOG.md` 11/04 |

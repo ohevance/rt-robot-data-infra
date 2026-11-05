@@ -3,7 +3,7 @@
 목표: **실시간 커널에서 재는 표①의 진짜 숫자.** WSL 값은 참고값일 뿐이고, 이 숫자가 포트폴리오의 핵심이다.
 실시간 커널이 일반 커널과 무엇이 다른지는 [`GLOSSARY.md` → PREEMPT_RT](GLOSSARY.md#preempt_rt-실시간-커널-패치) 에 표·비유·면접 한 문장으로 적어 두었다.
 Pi 4B 4 GB 로 충분하다(64-bit Cortex-A72 4코어). 모니터·키보드는 첫 부팅 확인에만 쓰고 이후는 SSH 로 한다.
-11/04 실측으로 1~4단계는 검증됐고(일반 커널 기준값 4줄, `docs/measurements/table1_pi4.md`), 5단계부터가 남았다.
+**1~8단계 전부 11/04~05 에 실제로 거쳤다.** 결과는 `docs/measurements/table1_pi4.md`(14줄), 해석은 `docs/experiments/E18.md`·`E19a~d.md`. 다시 잴 때(다른 보드, 방열판 뒤)는 같은 순서로.
 
 명령 앞의 **[Pi 창]** 은 `mgoh@pi-rt:~$` 프롬프트(SSH), **[WSL 창]** 은 `(.venv) mgoh@DESKTOP…:~/rt-robot-data-infra$` 프롬프트다.
 11/04 에 WSL 용 명령을 Pi 창에 쳐서 복사·커밋이 실패했다 — 창을 먼저 본다.
@@ -60,7 +60,7 @@ sudo scripts/cyclictest_run.sh pi4_generic_stress 120 stress        # 방열판 
 ```
 11/04 결과: jitter max 24.9 / 781.2 us, cyclictest max 376 / 695 us(한가/부하), 스로틀 0.
 
-## 5. 실시간 커널 켜기 (10분 + 재부팅)
+## 5. 실시간 커널 켜기 (10분 + 재부팅) — 완료 11/05: `6.8.0-2054-raspi-realtime`, `/sys/kernel/realtime` = 1
 Ubuntu Pro 개인 구독은 무료(기기 5대). 토큰을 받는 길:
 1. PC 브라우저 **시크릿 창**에서 `login.ubuntu.com/+new_account` → Ubuntu One 가입(이메일·영문 이름·소문자 사용자명·비밀번호) → 인증 메일 링크.
 2. `ubuntu.com/pro/dashboard` → Sign in → **Free Personal Token** `C1…` 복사. (토큰은 채팅·문서에 적지 않는다.)
@@ -78,7 +78,7 @@ cat /sys/kernel/realtime     # 1 이면 PREEMPT_RT
 되돌리기(필요하면): `sudo pro disable realtime-kernel && sudo reboot`.
 플랜 B(토큰이 끝내 안 되면): WSL 에서 Pi 커널(rpi-6.12.y)을 `CONFIG_PREEMPT_RT=y` 로 크로스 컴파일해 `/boot/firmware` 에 올린다 — 2~3시간, 별도 안내.
 
-## 6. 실시간 커널에서 측정 (약 15분)
+## 6. 실시간 커널에서 측정 (약 15분) — 완료 11/05: jitter max 27.8 / 300.6 / 311.5, cyclictest max 37 / 132
 4단계와 **같은 명령, 라벨만 `pi4_rt_*`**. 온도 50 °C 아래에서 시작, 조건 사이에 2~3분 식힌다.
 ```bash
 # [Pi 창]
@@ -92,7 +92,7 @@ sudo scripts/cyclictest_run.sh pi4_rt_stress     120 stress
 ```
 각 명령 끝의 `temp: a -> b mC | throttled: 0` 에서 **throttled 가 0 이 아니면 그 줄은 버리고 식힌 뒤 다시** 잰다.
 
-## 7. (선택, 가장 큰 개선) CPU 3 을 커널에서 떼어 내기 — isolcpus
+## 7. (선택, 가장 큰 개선) CPU 3 을 커널에서 떼어 내기 — isolcpus — 완료 11/05: max 189, work max 53
 RT 스레드만 쓰는 CPU 를 하나 비워 두면 max 가 크게 준다. 부팅 인자 한 줄:
 ```bash
 # [Pi 창]
@@ -104,7 +104,7 @@ sudo scripts/jitter_run.sh pi4_rt_stress_isol 60 stress 3
 ```
 (부하 생성기 stress-ng 는 격리된 CPU 3 에는 올라가지 않으므로 "부하 3코어 + RT 전용 1코어" 상태가 된다.)
 
-## 8. 표① 만들고 결과 가져오기
+## 8. 표① 만들고 결과 가져오기 — 완료 11/05 (커밋 8f06d39)
 ```bash
 # [Pi 창] — sudo 로 만든 결과가 root 소유라 나중에 git pull 이 막힌다. 내 것으로 바꿔 둔다
 sudo chown -R mgoh:mgoh ~/rt-robot-data-infra
@@ -118,13 +118,23 @@ python3 scripts/make_table1.py --cyclictest 'docs/measurements/cyclictest_pi4_*.
 git add docs/measurements && git commit -m "measurements: 표① Pi 4 PREEMPT_RT 실측" && git push
 ```
 
+## 6-1. 도구 두 개가 다르게 나올 때 (11/05 에 실제로 겪음 — `docs/experiments/E19d.md`)
+cyclictest 와 jitter_bench 의 max 가 2배 넘게 다르면 측정기를 의심하기 전에 **설정을 같게** 맞춰 본다:
+```bash
+# [Pi 창] 같은 설정 = 스레드 1개, 같은 CPU, 같은 우선순위, 일 0, 같은 부하
+STRESS_VM_BYTES=256M JITTER_WORK_US=0 sudo -E scripts/jitter_run.sh chk_jitter 60 stress 2
+stress-ng --cpu 4 --io 2 --vm 1 --vm-bytes 256M --timeout 75s >/dev/null 2>&1 &
+sleep 3; sudo cyclictest -m -p 80 -a 2 -t 1 -i 1000 -h 1000 -q -D 60 > docs/measurements/cyclictest_chk.txt; wait
+```
+11/05 결과 274 vs 270 — 같았다. 차이는 cyclictest `-S`(CPU 마다 스레드)와 부하의 `--vm-bytes` 에서 왔다. **두 도구를 직접 비교하는 줄은 `STRESS_VM_BYTES` 를 같게 준다.**
+
 ## 읽는 법 (무엇이 나와야 "정상"인가)
 | 조건 | 11/04 실측(일반 커널) | RT 커널 기대(추정) | 뜻 |
 |---|---|---|---|
-| 한가 | cyclictest 5분 max **376** us (jitter 60 s 는 24.9) | max 수십 us | 일반 커널은 한가해도 분 단위로 수백 us 를 뺏긴다. RT 는 그 작업들도 선점된다 |
-| 부하 | cyclictest max **695**, jitter max **781** us, `work time` 이 134.9 까지 밀림 | max 100~200 us | Pi 4 의 알려진 수준(Pi 5 보다 높다). 1 ms 주기 안에 **항상** 들어오면 통과 |
-| 부하 + CPU 3 고정 | — | 부하와 비슷하거나 약간 개선 | 고정만으로는 커널 작업을 못 막는다 |
-| 부하 + isolcpus | — | max 가 부하의 절반 이하 | CPU 를 떼어 낸 효과 |
+| 한가 | cyclictest 5분 max **376** us (jitter 60 s 는 24.9) | max 수십 us → **실측 37** (jitter 27.8) ✓ | 일반 커널은 한가해도 분 단위로 수백 us 를 뺏긴다. RT 는 그 작업들도 선점된다 |
+| 부하 | cyclictest max **695**, jitter max **781** us, `work time` 이 134.9 까지 밀림 | max 100~200 us → **실측 cyclictest 132 ✓, jitter 301**(p99 는 146 → 185 로 비용) | Pi 4 의 알려진 수준. 1 ms 주기 안에 **항상** 들어오면 통과 |
+| 부하 + CPU 3 고정 | — | 부하와 비슷하거나 약간 개선 → **실측 311** (변화 없음) ✓ | 고정만으로는 커널 작업을 못 막는다 |
+| 부하 + isolcpus | — | max 가 부하의 절반 이하 → **실측 189, work max 53** ✓ | CPU 를 떼어 낸 효과. 잔여 189 는 격리된 CPU 에도 오는 것(타이머·IPI) |
 표에서 보는 것은 평균이 아니라 **p99.9 와 max**. 이 줄들이 "우선순위가 아니라 커널이 꼬리를 자른다"는 D0 의 주장을 증명한다.
 
 ## 보내 주실 것

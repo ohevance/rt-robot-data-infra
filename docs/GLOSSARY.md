@@ -37,6 +37,12 @@
 - 여기서: `scripts/lib_thermal.sh`(읽기), `cyclictest_run.sh`·`jitter_run.sh`(.meta 기록), `make_table1.py`(비고 "온도 a→b °C, 스로틀 0"), 결정은 `DECISIONS.md` 11/04.
 - 면접 한 문장: "임베디드 보드의 지연 측정은 열 조건을 같이 기록하지 않으면 재현도 비교도 안 된다 — 표①의 모든 Pi 줄에 온도와 스로틀 여부가 붙어 있는 이유."
 
+## IPI (Inter-Processor Interrupt, CPU 간 인터럽트) — isolcpus 로도 못 막는 지연
+- 한 CPU 가 다른 CPU 들에게 "지금 당장 이것 해라" 하고 보내는 인터럽트. 대표: 메모리 매핑을 지울 때(munmap) 다른 CPU 의 주소 변환 캐시(TLB)를 비우라는 **TLB 동기화**.
+- 우선순위(SCHED_FIFO)도, CPU 격리(isolcpus)도 막지 못한다 — 그래서 격리한 CPU 3 에도 189 us 의 꼬리가 남는다(표①, E19-c).
+- 비유: 건물 전체 화재 경보. 내 방 문을 잠가도(격리) 경보는 들린다.
+- 여기서: `docs/experiments/E19c.md`(잔여 189 의 추정 원인), `E19d.md`(stress-ng `--vm-bytes` 가 작을수록 munmap 이 잦아 IPI 가 는다는 추정), `scripts/lib_stress.sh` 머리말.
+
 ## cyclictest
 - "1 ms마다 깨워 달라" 해놓고 실제로 **얼마나 늦게 깼는지** 수십만 번 재는 표준 자(rt-tests 패키지).
 - 여기서: `scripts/cyclictest_run.sh` → 표①.

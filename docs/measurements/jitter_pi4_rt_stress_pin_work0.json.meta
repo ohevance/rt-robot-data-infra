@@ -9,3 +9,6 @@ note=E19-d A: --work-us 0, isolcpus=3 상태, vm 256M
 temp_before_mC=na
 temp_after_mC=68166
 throttled_after=0
+stress_vm_bytes=256M
+prio=80
+work_us=0
