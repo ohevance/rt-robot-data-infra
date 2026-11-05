@@ -13,6 +13,7 @@
 - 코드 규칙: 한 함수 40줄, 람다·매크로·삼항 중첩 금지, 파일 머리 "역할/읽는 순서", 숫자에 단위, 주석은 "왜". 결정 `docs/DECISIONS.md`, 깨진 것 `docs/LOG.md`.
 - **git 으로 전환(11/04).** 전달: Claude 가 `C:\Users\에반스\Downloads\patch-NN.bundle` 을 넣음 → 사용자 `git pull --no-rebase --no-edit /mnt/c/Users/에반스/Downloads/patch-NN.bundle main` → **push 는 사용자가.** (`--rebase` 는 push 된 이력을 다시 써서 충돌을 냈으므로 금지.) Claude 는 공개 저장소를 **읽기 전용으로 fetch** 해 사용자 main 에 기준을 맞춘다(11/04 밤부터; bundle 을 받을 필요 없음). GitHub 를 Claude 에 연결하지 않기로 함(사용자 결정). 측정 결과는 사용자가 WSL 에서 직접 커밋·push(예: b4c6f3b).
 - 안내문에는 창을 표시한다: **[Pi 창]** / **[WSL 창]** (11/04 창을 헷갈려 실패한 적 있음).
+- **(11/05 규칙) "왜 하는가"와 "결과를 보고 어떻게 판단했는가"는 반드시 저장소 문서에 남긴다** — 개념은 GLOSSARY, 질문·결과는 EXPERIMENTS, 판단(읽기)은 LOG, 결정은 DECISIONS. 채팅에서 설명한 것은 같은 날 문서로 옮긴다(READING_GUIDE §4).
 - 커밋 끝에 `Co-Authored-By: Claude …` 줄이 있음(README "작성 방식"과 일치). 작성자는 오문규 <ohevance@gmail.com>.
 
 ## 3. 환경 (확인됨)

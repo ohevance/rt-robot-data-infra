@@ -73,3 +73,10 @@ python3 fleet/tests/test_collector_resilience.py   # DB 죽음 → backlog → �
 - 주석은 '무엇을 하는가'가 아니라 '왜 이렇게 하는가'. 한국어.
 - 숫자 상수에는 이름과 단위 (`kRingSize`, `period_ns`, `work_us`).
 - 결정은 `docs/DECISIONS.md`, 깨진 것은 `docs/LOG.md`에 그날 적는다.
+- **"왜 하는가"와 "결과를 보고 어떻게 판단했는가"는 반드시 문서에 남는다** (채팅·머릿속에만 두지 않는다, 2026-11-05 규칙):
+  - 개념 설명(이 용어가 무엇이고 왜 중요한가) → `docs/GLOSSARY.md` (예: PREEMPT_RT 항목의 "무엇이 다른가")
+  - 실험을 왜 했고 무엇을 물었나 → `docs/EXPERIMENTS.md` 의 "질문" 열
+  - 결과를 보고 내린 판단(이 숫자가 뜻하는 것, 정상/비정상, 다음에 할 일) → `docs/LOG.md` 의 "읽기:" 줄 + `EXPERIMENTS.md` 의 "결과" 열
+  - 왜 이렇게 만들었나, 버린 대안 → `docs/DECISIONS.md`
+  - 측정 안내의 "읽는 법" 표(무엇이 나와야 정상인가) → 해당 `SETUP_*.md`
+  채팅에서 한 설명은 같은 날 위 자리 중 하나로 옮긴다. 옮기지 않은 설명은 없는 것과 같다.
