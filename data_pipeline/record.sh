@@ -15,7 +15,11 @@ cd "$(dirname "$0")/.."
 OUT="build/bags/run_$(date +%Y%m%d_%H%M%S)"
 mkdir -p build/bags
 echo "기록 ${SECONDS_TO_RECORD}초 → ${OUT}  (Ctrl+C 로 일찍 끝내도 파일은 남는다)"
-# --max-bag-duration 은 "파일 쪼개기" 옵션이라 시간 제한 용도로는 timeout 을 쓴다. SIGINT 라야 rosbag2 가 파일을 곱게 닫는다
-timeout -s INT "${SECONDS_TO_RECORD}" ros2 bag record -s mcap -o "${OUT}" /joint_states /joint_command /rt_status || true
+# --max-bag-duration 은 "파일 쪼개기" 옵션이라 시간 제한 용도로는 timeout 을 쓴다. SIGINT 라야 rosbag2 가 파일을 곱게 닫는다.
+# --foreground 가 없으면(11/05 실제로 겪음) timeout 이 recorder 를 다른 프로세스 그룹에 두고, recorder 는 키보드(SPACE 일시정지)를
+# 읽으려다 터미널에서 SIGTTIN 을 받아 "정지" 된다 → 아무 로그도 안 찍히고 30초 뒤 SIGINT 도 못 받는다.
+# 키보드 제어도 꺼서(--disable-keyboard-controls) 터미널을 아예 안 읽게 한다. 토픽은 --topics 로(위치 인자는 Jazzy 에서 폐기 예고).
+timeout --foreground -s INT "${SECONDS_TO_RECORD}" \
+  ros2 bag record -s mcap -o "${OUT}" --disable-keyboard-controls --topics /joint_states /joint_command /rt_status || true
 echo "끝. 파일:"; ls -la "${OUT}"
 echo "다음:  python3 data_pipeline/bag_to_csv.py ${OUT}"
