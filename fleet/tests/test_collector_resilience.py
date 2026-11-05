@@ -9,6 +9,8 @@
   5) --qos 1 이면 지속 세션(clean_session=False)으로 붙고 telemetry 를 QoS 1 로 구독한다
   6) 옛 스키마(003 미적용)면 check_schema 가 False 를 돌려준다 (안내 후 종료용)
   7) 종료(SIGTERM/Ctrl+C) 때 아직 묶지 않은 pending 행을 마지막으로 적재한다 (11/04 실측에서 잃었던 "마지막 1초")
+  8) main() 한 바퀴 스모크: 인자 → 잠금 → 시그널 핸들러 등록 → 루프 → shutdown 까지 실제 진입점이 깨지지 않았는가
+     (11/05 CI 에서 request_stop 누락 NameError 가 통합 테스트에서만 드러났다 — 진입점은 단위 테스트가 한 번은 타야 한다)
 
 실행:  python3 fleet/tests/test_collector_resilience.py
 """
@@ -139,12 +141,32 @@ def test_old_schema_detected():
     check(c.check_schema() is False, "003 미적용 스키마면 False (migrate.py 안내)")
 
 
+def test_main_entry_smoke():
+    """main() 을 끝까지 한 번 통과시킨다. STOP 플래그를 미리 세워 두면 while 이 바로 끝나 shutdown 까지 간다.
+    시그널 핸들러도 직접 불러 본다(request_stop 이 없으면 여기서 NameError)."""
+    BROKER.reset()
+    fake_psycopg.reset()
+    collector.single_instance.LOCK_DIR = os.path.join(HERE, "..", "logs", "test_lock")   # 진짜 수집기의 잠금과 겹치지 않게
+    saved_argv = sys.argv
+    sys.argv = ["collector.py", "--broker", "localhost", "--db", "postgresql://fake", "--interval", "0.01"]
+    try:
+        collector.STOP["requested"] = False
+        collector.request_stop(15, None)                       # SIGTERM 핸들러: 플래그만 세운다
+        check(collector.STOP["requested"] is True, "request_stop 이 STOP 플래그를 세운다")
+        rc = collector.main()                                  # 플래그가 이미 True → 루프 0바퀴 → shutdown → 0
+        check(rc == 0, f"main() 이 0 으로 끝난다 (실제 {rc})")
+    finally:
+        sys.argv = saved_argv
+        collector.STOP["requested"] = False
+
+
 if __name__ == "__main__":
     test_db_outage_and_recovery()
     test_backlog_limit()
     test_persistent_session_option()
     test_shutdown_flushes_pending()
     test_old_schema_detected()
+    test_main_entry_smoke()
     if fail_count == 0:
         print("OK: collector resilience")
         sys.exit(0)

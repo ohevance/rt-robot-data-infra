@@ -139,6 +139,8 @@ flowchart TD
 | 노드가 파라미터 파일로 시작 안 됨 | 빈 배열 `mujoco_joints: []` 의 타입 미정 | 빈 배열이면 키를 뺀다 | 11/03 D3~D5 |
 | Pi 결과 파일 복사·커밋 실패 | WSL 명령을 Pi 창에 침, sudo 가 만든 root 소유 파일 | 창 표시 [Pi 창]/[WSL 창], `chown -R` | 11/04 밤 |
 | Ubuntu One 가입 실패(실시간 커널 토큰) | Launchpad 사용자명 검사 time out(Canonical 쪽) | 재시도 / 플랜 B 커널 직접 빌드 | 11/04 밤 |
+| CI `fleet_integration` 빨강(수집기 시작 직후 `NameError: request_stop`) | 11/04 잠금 공용화 패치에서 시그널 핸들러 함수가 통째로 삭제됨. 단위 테스트가 main() 을 안 타서 못 잡음 | 함수 복원 + main() 한 바퀴 스모크 테스트 추가 | 11/05 |
+| `record.sh` 가 조용히 안 끝남 | `timeout` 이 recorder 를 뒤 프로세스 그룹에 두고, 키보드 읽기에서 SIGTTIN 정지 | `timeout --foreground` + `--disable-keyboard-controls` | 11/05 (E20) |
 
 ## 5. 아직 안 한 것
 - (완료) E19 Pi 4 PREEMPT_RT, E20 기록 파이프라인 첫 실행.

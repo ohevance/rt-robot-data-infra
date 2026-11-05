@@ -314,6 +314,14 @@ class Collector:
 STOP = {"requested": False}   # 종료 신호를 받으면 True (시그널 핸들러는 이 플래그만 세운다)
 
 
+def request_stop(signum, frame):
+    """SIGTERM/SIGINT 핸들러 — 플래그만 세운다. 핸들러 안에서 DB·소켓을 만지지 않는다(재진입 위험).
+    실제 마지막 적재는 main 의 while 이 끝난 뒤 shutdown() 이 한다.
+    (11/04 패치에서 잠금 함수를 공용화하며 이 함수가 통째로 빠졌고, 단위 테스트는 main() 을 안 타서 못 잡았다 → CI 통합 테스트만 빨갰다.
+     그래서 test_collector_resilience 에 main() 한 바퀴 스모크를 추가했다.)"""
+    STOP["requested"] = True
+
+
 def acquire_single_instance_lock():
     """fleet/logs/collector.lock 을 잠근다. 이미 다른 수집기가 잡고 있으면 안내하고 None"""
     lock_file = single_instance.acquire("collector")
