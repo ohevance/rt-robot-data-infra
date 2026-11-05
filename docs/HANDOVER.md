@@ -16,7 +16,7 @@
 - **(11/05 규칙) "왜 하는가"와 "결과를 보고 어떻게 판단했는가"는 반드시 저장소 문서에 남긴다** — 개념은 GLOSSARY, 질문·결과는 EXPERIMENTS, 판단(읽기)은 LOG, 결정은 DECISIONS. 채팅에서 설명한 것은 같은 날 문서로 옮긴다(READING_GUIDE §4).
 - 커밋 끝에 `Co-Authored-By: Claude …` 줄이 있음(README "작성 방식"과 일치). 작성자는 오문규 <ohevance@gmail.com>.
 
-## 3. 환경 (확인됨)
+## 3. 환경 (확인됨) — 전체 지도와 판단 기준은 `docs/ENVIRONMENT.md`
 - WSL2 Ubuntu 24.04, 12 CPU, Docker, ROS 2 Jazzy(ros-base) + Cyclone + Fast DDS(기본 RMW 는 fastrtps), `gh` 설치·로그인(ohevance).
 - `~/rt-robot-data-infra`: venv 는 **`--system-site-packages`** 로 생성(rclpy 가 쓰는 yaml·numpy 때문). `.bashrc` 가 터미널마다 저장소 이동 + venv + ROS 2 + `install/setup.bash` + `RT_REPO_ROOT` 자동 설정.
 - `third_party/mujoco`(3.3.2), `third_party/mujoco_menagerie/trs_so_arm100` 설치됨(gitignore). `build/rt_core_mj`, `install/`(MuJoCo 옵션 colcon) 있음.

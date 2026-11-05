@@ -120,8 +120,9 @@
 - 여기서: `third_party/mujoco_menagerie/trs_so_arm100/scene.xml` (SO-ARM100; SO-101 과 같은 5축+그리퍼).
 
 ## CI (GitHub Actions)
-- 코드를 올릴 때마다 **자동으로 빌드·테스트를 돌리는 검사원**. 통과하면 README에 초록 배지.
-- 여기서: `.github/workflows/ci.yml`.
+- 코드를 올릴 때마다 **자동으로 빌드·테스트를 돌리는 검사원**. 통과하면 README에 초록 배지. 내 노트북이 아니라 GitHub 의 새 가상 머신(러너)에서 돈다.
+- 비유: 도면을 보관소에 낼 때마다 검사원이 백지 상태의 작업대에서 다시 조립해 보는 것 — "내 작업대에서만 되는" 문제를 거른다.
+- 여기서: `.github/workflows/ci.yml`(정의), `docs/ENVIRONMENT.md` §5(환경·트리거·잡 3개·결과 읽는 법·실패 유형별 첫 행동·Jenkins 대응표). CI 가 실제로 잡은 문제 2건은 §5-5.
 
 ## MCAP / rosbag2
 - 로봇 데이터(여러 토픽의 메시지)를 **시간순으로 한 파일에 기록**하는 형식(MCAP)과 도구(rosbag2).

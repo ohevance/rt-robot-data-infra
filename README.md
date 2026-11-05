@@ -63,6 +63,7 @@ python3 fleet/tests/test_fleet_logic.py && python3 fleet/tests/test_ota_rollout.
 관제·OTA·장애 주입(도커 필요): [`fleet/README.md`](fleet/README.md). MuJoCo: [`backends/mujoco/README.md`](backends/mujoco/README.md).
 
 ## 문서
+- **전체 환경 지도**(개발 PC · Pi · GitHub/CI · 작성 작업본 — 무엇이 어디서 돌고, 언제 움직이고, 결과를 어떻게 읽나): [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)
 - 코드를 읽는 순서: [`docs/READING_GUIDE.md`](docs/READING_GUIDE.md)
 - 구조: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - 용어: [`docs/GLOSSARY.md`](docs/GLOSSARY.md)
