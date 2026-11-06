@@ -28,7 +28,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | 내 측정기 vs 표준 도구(cyclictest), **같은 설정**으로 맞췄을 때 | **270 vs 274 us** (처음 2.3배 차이의 원인은 스레드 배치·부하 정의) | Pi 4B RT | `docs/experiments/E19d.md` |
 | MuJoCo 물리 한 주기 비용 p50 / p99 / max | 6.4 / 8.5 / 29.4 us (1 ms 의 0.9%) | GitHub 러너, SO-ARM100 6축 | `mujoco_backend_ci.json` |
 | 같은 것, **ALLEX 48 자유도**(위로보틱스 공개 모델) 1 kHz | WSL 336 / 622 / 1,785 us (p99 = 예산의 62 %) · 러너 382 / 458 / 609 (46 %) | WSL2 단독(참고값) · GitHub 러너 | `mujoco_backend_allex_wsl_1khz.json`, `…_ci_1khz_run42172730308.json`, E21 |
-| 같은 것, 프로필 기본인 **500 Hz** | 327 / 1,000 / 1,589 us (p99 = 2 ms 의 50 %) | WSL2 단독(참고값) | `mujoco_backend_allex_wsl_500hz.json`, E21 |
+| 같은 것, 프로필 기본인 **500 Hz** | WSL 327 / 1,000 / 1,589 us (p99 = 2 ms 의 50 %) · 러너 390 / 510 / 685 (26 %) | WSL2 단독(참고값) · GitHub 러너(CI 게이트) | `mujoco_backend_allex_wsl_500hz.json`, `…_ci_500hz_run42175845461.json`, E21 |
 | 같은 것, WSL 단독 / ROS 2 노드 안 `work_us`(제어+물리) | 4.9 / 6.3 / 20.8 us · 41 / 145 / 247 us | WSL2 참고값 | `docs/LOG.md` 11/04 |
 | 물리가 드러낸 중력 처짐 (어깨 Pitch, 목표 −0.200) | −0.180 rad (1.1° 부족) | WSL2, MuJoCo | `docs/LOG.md` 11/04 |
 | 로봇 안 기록 파이프라인 30 s: `/joint_states` 실제 Hz / 틈 / 드롭 | **100.0 Hz / 0 / 0** (2,964행), 요약표에 어깨 처짐 0.019 rad + 팔꿈치 0.009 자동 검출 | WSL2, rosbag2 MCAP → CSV | `record_summary_wsl_20261105.md` |
@@ -65,7 +65,7 @@ python3 fleet/tests/test_fleet_logic.py && python3 fleet/tests/test_ota_rollout.
 관제·OTA·장애 주입(도커 필요): [`fleet/README.md`](fleet/README.md). MuJoCo: [`backends/mujoco/README.md`](backends/mujoco/README.md).
 
 ## 문서
-- **발표 장표 138장 + 장표마다 설명 문서 1개**(순서도 논리: 로봇을 움직이는 10단계(왕초보 바탕 → 핵심 코드 파일:줄) → 데이터의 길 → 검증 → 공고와 숫자 → 환경 → 어떻게 믿나 → 왜 이렇게 → 결국 로봇은 이렇게 움직인다): [`docs/deck/README.md`](docs/deck/README.md) · 장표 목록 [`docs/deck/SLIDES.md`](docs/deck/SLIDES.md)
+- **발표 장표 139장 + 장표마다 설명 문서 1개**(순서도 논리: 로봇을 움직이는 10단계(왕초보 바탕 → 핵심 코드 파일:줄) → 데이터의 길 → 검증 → 공고와 숫자 → 환경 → 어떻게 믿나 → 왜 이렇게 → 결국 로봇은 이렇게 움직인다): [`docs/deck/README.md`](docs/deck/README.md) · 장표 목록 [`docs/deck/SLIDES.md`](docs/deck/SLIDES.md)
 - **전체 환경 지도**(개발 PC · Pi · GitHub/CI · 작성 작업본 — 무엇이 어디서 돌고, 언제 움직이고, 결과를 어떻게 읽나): [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)
 - 코드를 읽는 순서: [`docs/READING_GUIDE.md`](docs/READING_GUIDE.md)
 - 구조: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)

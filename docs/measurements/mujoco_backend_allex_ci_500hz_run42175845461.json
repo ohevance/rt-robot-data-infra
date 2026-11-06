@@ -1,0 +1,15 @@
+{
+ "model": "third_party/allex_model/mjcf/scene.xml",
+ "dof": 48,
+ "period_us": 2000,
+ "cycles": 1000,
+ "substeps": 1,
+ "step_us": {
+  "p50": 390.1,
+  "p99": 510.4,
+  "max": 684.6
+ },
+ "joint0": "R_Shoulder_Pitch_Joint",
+ "joint0_moved_rad": 0.2976,
+ "env": "GitHub Actions ubuntu-24.04 러너, run 42175845461 (2026-11-06, patch-25 push, CI ALLEX 게이트 500 Hz) 아티팩트 mujoco-ci 의 mujoco_backend_allex_ci.json 그대로"
+}
