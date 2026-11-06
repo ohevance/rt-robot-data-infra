@@ -5,7 +5,7 @@
 Pi 4B 4 GB 로 충분하다(64-bit Cortex-A72 4코어). 모니터·키보드는 첫 부팅 확인에만 쓰고 이후는 SSH 로 한다.
 **1~8단계 전부 11/04~05 에 실제로 거쳤다.** 결과는 `docs/measurements/table1_pi4.md`(14줄), 해석은 `docs/experiments/E18.md`·`E19a~d.md`. 다시 잴 때(다른 보드, 방열판 뒤)는 같은 순서로.
 
-명령 앞의 **[Pi 창]** 은 `mgoh@pi-rt:~$` 프롬프트(SSH), **[WSL 창]** 은 `(.venv) mgoh@DESKTOP…:~/rt-robot-data-infra$` 프롬프트다.
+명령 앞의 **[Pi 창]** 은 `<사용자>@pi-rt:~$` 프롬프트(SSH), **[WSL 창]** 은 `(.venv) <사용자>@DESKTOP…:~/rt-robot-data-infra$` 프롬프트다.
 11/04 에 WSL 용 명령을 Pi 창에 쳐서 복사·커밋이 실패했다 — 창을 먼저 본다.
 
 ## 0. 준비물
@@ -20,12 +20,12 @@ Pi 4B 4 GB 로 충분하다(64-bit Cortex-A72 4코어). 모니터·키보드는 
 ## 1. SD 카드 굽기 (Windows, 10분) — 완료
 1. **Raspberry Pi Imager** 설치 (raspberrypi.com/software). 카드를 따로 포맷할 필요 없다(Imager 가 지운다).
 2. Device: *Raspberry Pi 4* → OS: *Other general-purpose OS → Ubuntu → **Ubuntu Server 24.04 LTS (64-bit)*** → Storage: SD 카드(시스템 드라이브 제외 체크 유지).
-3. NEXT → **Edit Settings**: hostname `pi-rt`, 사용자 `mgoh` + 비밀번호, Wi-Fi SSID/비밀번호 + 국가 `KR`(전파 규제 지역 코드), 시간대 Asia/Seoul, 키보드 `us`(한글 키보드도 배열은 us); **Services 탭 → Enable SSH (password authentication)** → Save → Yes → 쓰기.
+3. NEXT → **Edit Settings**: hostname `pi-rt`, 사용자 이름 + 비밀번호, Wi-Fi SSID/비밀번호 + 국가 `KR`(전파 규제 지역 코드), 시간대 Asia/Seoul, 키보드 `us`(한글 키보드도 배열은 us); **Services 탭 → Enable SSH (password authentication)** → Save → Yes → 쓰기.
 4. 카드를 Pi 에 꽂고 전원. 첫 부팅 2~3분. 모니터가 있으면 로그인 화면 위의 `wlan0: <IP>` 를 적어 둔다. 없으면 공유기 관리 페이지에서 `pi-rt` 의 IP.
 
 ## 2. 접속 (Windows PowerShell) — 완료
 ```powershell
-ssh mgoh@192.168.45.250        # IP 는 1-4 에서 적은 것. 처음엔 yes → 비밀번호
+ssh <사용자>@<Pi IP>           # IP 는 1-4 에서 적은 것. 처음엔 yes → 비밀번호
 ```
 첫 접속 직후 몇 분은 자동 업데이트가 apt 를 잡고 있다. "Could not get lock" 이면 3~5분 기다린다.
 ```bash
@@ -107,13 +107,13 @@ sudo scripts/jitter_run.sh pi4_rt_stress_isol 60 stress 3
 ## 8. 표① 만들고 결과 가져오기 — 완료 11/05 (커밋 8f06d39)
 ```bash
 # [Pi 창] — sudo 로 만든 결과가 root 소유라 나중에 git pull 이 막힌다. 내 것으로 바꿔 둔다
-sudo chown -R mgoh:mgoh ~/rt-robot-data-infra
+sudo chown -R <사용자>:<사용자> ~/rt-robot-data-infra
 python3 scripts/make_table1.py --cyclictest 'docs/measurements/cyclictest_pi4_*.txt' --jitter 'docs/measurements/jitter_pi4_*.json' --out docs/measurements/table1_pi4.md
 cat docs/measurements/table1_pi4.md
 ```
 ```bash
 # [WSL 창] — Pi 의 결과 파일을 저장소로 (Pi 에는 GitHub 로그인이 없다. Pi 는 측정만, 커밋은 WSL 에서)
-scp 'mgoh@192.168.45.250:~/rt-robot-data-infra/docs/measurements/*pi4*' docs/measurements/
+scp '<사용자>@<Pi IP>:~/rt-robot-data-infra/docs/measurements/*pi4*' docs/measurements/
 python3 scripts/make_table1.py --cyclictest 'docs/measurements/cyclictest_pi4_*.txt' --jitter 'docs/measurements/jitter_pi4_*.json' --out docs/measurements/table1_pi4.md
 git add docs/measurements && git commit -m "measurements: 표① Pi 4 PREEMPT_RT 실측" && git push
 ```

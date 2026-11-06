@@ -2,7 +2,7 @@
 
 로봇과 무관한(robot-agnostic) **실시간 제어 + 데이터 인프라** 저장소.
 ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 / MuJoCo / CI — 휴머노이드 로봇 회사의
-"실시간 제어 및 데이터 인프라" 직무를 겨냥해 2026년 11월에 만들고 있다. (작업 중)
+"실시간 제어 및 데이터 인프라" 직무를 겨냥해 2026년 11월에 2주 일정으로 만들고 있다(진행 기록: `docs/LOG.md`).
 
 ![ci](https://github.com/ohevance/rt-robot-data-infra/actions/workflows/ci.yml/badge.svg)
 

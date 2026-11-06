@@ -1,1 +1,1 @@
-{"model": "/home/mgoh/rt-robot-data-infra/third_party/mujoco_menagerie/trs_so_arm100/scene.xml", "dof": 6, "period_us": 1000, "cycles": 2000, "substeps": 1, "step_us": {"p50": 4.9, "p99": 6.3, "max": 20.8}, "joint0_moved_rad": 0.2988}
+{"model": "third_party/mujoco_menagerie/trs_so_arm100/scene.xml", "dof": 6, "period_us": 1000, "cycles": 2000, "substeps": 1, "step_us": {"p50": 4.9, "p99": 6.3, "max": 20.8}, "joint0_moved_rad": 0.2988}

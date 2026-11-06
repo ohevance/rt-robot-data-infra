@@ -16,7 +16,7 @@
 | 브라우저 탭 1 | `http://localhost:3000` Grafana "Fleet Overview", Last 5 minutes, 자동 새로고침 5 s | 초당 메시지 ≈ 50, 온라인 50 |
 | 브라우저 탭 2 | `https://github.com/ohevance/rt-robot-data-infra` README (숫자 한눈에 표가 보이게) | 배지 초록 |
 | 브라우저 탭 3 | 같은 저장소 → Actions | 마지막 run ✓ |
-| Pi (선택) | 전원 켜 두기 → [WSL E] 에서 `ssh mgoh@192.168.45.250 true` 로 비밀번호 한 번 입력해 두기(녹화 중 또 묻지 않게 하려면 `ssh-copy-id mgoh@192.168.45.250`) | `uname -r` 에 realtime |
+| Pi (선택) | 전원 켜 두기 → [WSL E] 에서 `ssh pi-rt true` 로 비밀번호 한 번 입력해 두기(녹화 중 또 묻지 않게 하려면 `ssh-copy-id pi-rt`; `pi-rt` 별칭은 CHEATSHEET 의 `~/.ssh/config`) | `uname -r` 에 realtime |
 | 녹화 도구 | `Win + Shift + R`(캡처 도구 동영상) → 전체 화면 → 시작. 원테이크(한 파일) | 시험 녹화 5초 |
 
 원테이크로 찍는다(파일 하나). 틀리면 그 자리에서 다시 치고 계속 — 편집에서 잘라 낸다. 명령 출력이 끝나면 3초 멈춘다(자르기 쉽게).

@@ -31,7 +31,7 @@ cd ~ && git clone https://github.com/<아이디>/rt-robot-data-infra.git
 ```
 그 전에는 공유 폴더(zip)에서:
 ```bash
-cd ~ && unzip /mnt/c/Users/mgoh/Documents/robot-portfolio/rt-robot-data-infra_D0.zip
+cd ~ && unzip /mnt/c/Users/<사용자>/Documents/robot-portfolio/rt-robot-data-infra_D0.zip
 ```
 
 ## 4. 파이썬 가상환경 (이 저장소 전용)

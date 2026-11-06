@@ -4,14 +4,13 @@
 **https://github.com/ohevance/rt-robot-data-infra** (public, main, CI 초록)
 
 ## 1. 목표 (변경 없음)
-- 위로보틱스 "휴머노이드 로봇 SW 엔지니어(실시간 제어 및 데이터 인프라)" / 리멤버 "Framework S/W 엔지니어" 지원용 포트폴리오.
+- "휴머노이드 로봇 SW 엔지니어(실시간 제어 및 데이터 인프라)" 직무 지원용 포트폴리오.
 - **2주 계획: 11/04 ~ 11/17, 11/17(화) 지원.** 수치 표 3개(①RT 지연 ②DDS ③관제·장애·OTA), CI 배지, 2분 영상, 이력서 문장.
-- D9쯤 재직자 접촉(리멤버 커넥트·링크드인, 사내추천 200만원 제도) → 추천 경로 우선.
 
 ## 2. 작업 방식 (사용자 요구 — 바뀐 것 포함)
 - Claude 가 코드를 만들고 사용자가 WSL 에서 실행 → 출력 붙여 줌. **도형 보고서·모의 면접 생략.** 설명 틀: (1) 공고 ↔ 코드 ↔ 숫자 표 (2) 면접 한 문장 (3) 칠 명령.
 - 코드 규칙: 한 함수 40줄, 람다·매크로·삼항 중첩 금지, 파일 머리 "역할/읽는 순서", 숫자에 단위, 주석은 "왜". 결정 `docs/DECISIONS.md`, 깨진 것 `docs/LOG.md`.
-- **git 으로 전환(11/04).** 전달: Claude 가 `C:\Users\에반스\Downloads\patch-NN.bundle` 을 넣음 → 사용자 `git pull --no-rebase --no-edit /mnt/c/Users/에반스/Downloads/patch-NN.bundle main` → **push 는 사용자가.** (`--rebase` 는 push 된 이력을 다시 써서 충돌을 냈으므로 금지.) Claude 는 공개 저장소를 **읽기 전용으로 fetch** 해 사용자 main 에 기준을 맞춘다(11/04 밤부터; bundle 을 받을 필요 없음). GitHub 를 Claude 에 연결하지 않기로 함(사용자 결정). 측정 결과는 사용자가 WSL 에서 직접 커밋·push(예: b4c6f3b).
+- **git 으로 전환(11/04).** 전달: Claude 가 `C:\Users\<사용자>\Downloads\patch-NN.bundle` 을 넣음 → 사용자 `git pull --no-rebase --no-edit /mnt/c/Users/<사용자>/Downloads/patch-NN.bundle main` → **push 는 사용자가.** (`--rebase` 는 push 된 이력을 다시 써서 충돌을 냈으므로 금지.) Claude 는 공개 저장소를 **읽기 전용으로 fetch** 해 사용자 main 에 기준을 맞춘다(11/04 밤부터; bundle 을 받을 필요 없음). GitHub 를 Claude 에 연결하지 않기로 함(사용자 결정). 측정 결과는 사용자가 WSL 에서 직접 커밋·push(예: b4c6f3b).
 - 안내문에는 창을 표시한다: **[Pi 창]** / **[WSL 창]** (11/04 창을 헷갈려 실패한 적 있음).
 - **(11/05 규칙) "왜 하는가"와 "결과를 보고 어떻게 판단했는가"는 반드시 저장소 문서에 남긴다** — 개념은 GLOSSARY, 질문·결과는 EXPERIMENTS, 판단(읽기)은 LOG, 결정은 DECISIONS. 채팅에서 설명한 것은 같은 날 문서로 옮긴다(READING_GUIDE §4).
 - 커밋 끝에 `Co-Authored-By: Claude …` 줄이 있음(README "작성 방식"과 일치). 작성자는 오문규 <ohevance@gmail.com>.
@@ -21,7 +20,7 @@
 - `~/rt-robot-data-infra`: venv 는 **`--system-site-packages`** 로 생성(rclpy 가 쓰는 yaml·numpy 때문). `.bashrc` 가 터미널마다 저장소 이동 + venv + ROS 2 + `install/setup.bash` + `RT_REPO_ROOT` 자동 설정.
 - `third_party/mujoco`(3.3.2), `third_party/mujoco_menagerie/trs_so_arm100` 설치됨(gitignore). `build/rt_core_mj`, `install/`(MuJoCo 옵션 colcon) 있음.
 - 관제 컨테이너 3개 떠 있음(mqtt persistence true + 볼륨, db, grafana). 수집기는 터미널에서 `--qos 1` 로 띄움(한 번에 하나, `fleet/logs/collector.lock`).
-- **Raspberry Pi 4 Model B 4 GB** (11/04 세팅 완료): Samsung PRO Plus 512 GB 에 Ubuntu Server 24.04.5 64-bit, hostname `pi-rt`, 사용자 `mgoh`, **Wi-Fi** 192.168.45.250(바뀔 수 있음 — 안 되면 공유기에서 `pi-rt` 찾기), SSH 비밀번호. 도구(git·cmake·rt-tests·stress-ng) 설치, 저장소 clone·빌드·ctest 4/4. 커널 `6.8.0-1064-raspi`(일반). 방열판 없음 → 부하 측정 120초. 기존 카드(Raspberry Pi OS 12)는 보관.
+- **Raspberry Pi 4 Model B 4 GB** (11/04 세팅 완료): Samsung PRO Plus 512 GB 에 Ubuntu Server 24.04.5 64-bit, hostname `pi-rt`, **Wi-Fi**(IP 는 바뀔 수 있음 — 안 되면 공유기에서 `pi-rt` 찾기), SSH 비밀번호. 도구(git·cmake·rt-tests·stress-ng) 설치, 저장소 clone·빌드·ctest 4/4. 커널 `6.8.0-1064-raspi`(일반). 방열판 없음 → 부하 측정 120초. 기존 카드(Raspberry Pi OS 12)는 보관.
 - Ubuntu One 계정 있음(11/05 아침 가입 성공, 전날 밤은 Launchpad time out). Ubuntu Pro 개인 토큰으로 Pi attach 완료 → **커널 `6.8.0-2054-raspi-realtime`, `/sys/kernel/realtime` = 1, `isolcpus=3 nohz_full=3 rcu_nocbs=3` 적용 상태**(되돌리기: `/boot/firmware/cmdline.txt.bak`). 토큰은 채팅 캡처에 한 번 노출됨 — 영상·문서에 넣지 말 것.
 
 ## 4. 저장소 상태 (main c71a5f2 + patch-12)

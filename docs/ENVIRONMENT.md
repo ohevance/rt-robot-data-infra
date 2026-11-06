@@ -68,11 +68,11 @@ flowchart LR
 
 | 길 | 트리거 | 명령 | 결과 확인 |
 |---|---|---|---|
-| ④ → ① 패치 전달 | 작업본이 커밋을 만들면 | `patch-NN.bundle` 이 `C:\Users\…\Downloads\` 에 놓임 → [WSL] `git pull --no-rebase --no-edit /mnt/c/Users/에반스/Downloads/patch-NN.bundle main` | `Fast-forward` 와 파일 목록. `--rebase` 금지(이력을 다시 써서 충돌 — 11/04) |
+| ④ → ① 패치 전달 | 작업본이 커밋을 만들면 | `patch-NN.bundle` 이 `C:\Users\…\Downloads\` 에 놓임 → [WSL] `git pull --no-rebase --no-edit /mnt/c/Users/<사용자>/Downloads/patch-NN.bundle main` | `Fast-forward` 와 파일 목록. `--rebase` 금지(이력을 다시 써서 충돌 — 11/04) |
 | ① → ③ 공개 | 사람이 결정할 때 | `git push` (push 는 항상 사람이) | `main -> main` 줄. 몇 분 뒤 CI |
 | ③ → ④ 기준 맞추기 | 패치를 만들기 전 | 작업본이 `git fetch`(읽기 전용) | 패치의 기준 커밋이 사용자의 main 과 같음 — "lacks prerequisite" 오류가 안 남 |
 | ③ → ② Pi 갱신 | 측정 스크립트가 바뀌었을 때 | [Pi] `git pull` | untracked 결과 파일이 있으면 막힌다 → `rm -f docs/measurements/*pi4*` 뒤 pull(GitHub 에 이미 있음) |
-| ② → ① → ③ 측정 결과 | 측정이 끝났을 때 | [WSL] `scp 'mgoh@<Pi IP>:~/rt-robot-data-infra/docs/measurements/*pi4*' docs/measurements/` → `make_table1.py` → commit → push | `table1_pi4.md` 줄 수, 각 줄의 "스로틀 0" |
+| ② → ① → ③ 측정 결과 | 측정이 끝났을 때 | [WSL] `scp '<사용자>@<Pi IP>:~/rt-robot-data-infra/docs/measurements/*pi4*' docs/measurements/` → `make_table1.py` → commit → push | `table1_pi4.md` 줄 수, 각 줄의 "스로틀 0" |
 | ① 안 기록 → 저장소 | 기록 실험 뒤 | `summary.md`·`rt_status.csv` 만 `docs/measurements/` 로 복사(MCAP 원본은 `build/`, 제외) | `record_*` 파일 |
 
 규칙 두 개: **커밋 주체는 ① 하나**(Pi 도 작업본도 push 하지 않는다 — 이력이 한 줄로 남고 자격 증명이 한 곳에만 있다). **숫자는 원본 파일과 함께**(`docs/measurements/README.md` 규칙).

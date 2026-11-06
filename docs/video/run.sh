@@ -8,13 +8,14 @@
 # 한 장면만:  bash docs/video/run.sh 3      (리허설·재촬영용)
 #
 # 전제: docs/VIDEO_SCRIPT.md 의 체크리스트대로 수집기·가상 장치·노드·50 Hz 명령이 떠 있고, Pi 는 켜져 있거나(ssh 생중계) 꺼져 있어도 됨(건너뜀).
-#       ssh 가 비밀번호를 묻지 않게 하려면 미리 한 번:  ssh-copy-id mgoh@192.168.45.250
+#       ssh 는 ~/.ssh/config 의 별칭 pi-rt 를 쓴다(CHEATSHEET.md). 비밀번호를 묻지 않게 하려면 미리 한 번:  ssh-copy-id pi-rt
+#       다른 주소를 쓰려면:  PI=사용자@IP bash docs/video/run.sh all
 # 읽는 순서: 도우미(typed·hold·browser) → scene0~6 → main
 # ---------------------------------------------------------------------------
 set -u
 cd "$(dirname "$0")/../.."
 
-PI="mgoh@192.168.45.250"
+PI="${PI:-pi-rt}"
 GREEN=$'\e[1;32m'; YELLOW=$'\e[1;33m'; DIM=$'\e[2m'; RESET=$'\e[0m'
 
 # 명령을 "친 것처럼" 보여 준다 (실제 실행은 호출한 쪽에서)

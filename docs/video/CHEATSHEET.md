@@ -60,10 +60,10 @@ gh run list -L 3
 → 5초 멈춤 → **녹화 정지**
 
 ---
-준비(녹화 전 한 번): `ssh-copy-id mgoh@192.168.45.250` (비밀번호 안 묻게) 와 `~/.ssh/config` 에
+준비(녹화 전 한 번): `~/.ssh/config` 에 아래를 적고 `ssh-copy-id pi-rt` (비밀번호 안 묻게)
 ```
 Host pi-rt
-    HostName 192.168.45.250
-    User mgoh
+    HostName <Pi IP>
+    User <Pi 사용자>
 ```
 리허설만 자동으로 돌려 보려면 `bash docs/video/run.sh all` (녹화에는 쓰지 않는다 — 직접 치는 모습이 데모다).
