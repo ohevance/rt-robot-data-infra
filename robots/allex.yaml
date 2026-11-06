@@ -1,21 +1,83 @@
 # ---------------------------------------------------------------------------
-# 로봇 프로필: ALLEX (위로보틱스 공개 시뮬레이션 모델) — 자리 표시
+# 로봇 프로필: ALLEX (위로보틱스 상체 휴머노이드, 공개 시뮬레이션 모델 v0.2.0)
 #
-# 2주 계획에서는 사용하지 않는다. 지원 후 면접 전에 추가 예정.
-# 추가할 때 바뀌는 것은 이 파일(관절 목록·모델 경로)뿐이어야 한다.
-#   - 모델: MJCF (MuJoCo), USD (Isaac Sim), URDF (ROS) — 회사 공개 저장소 라이선스 확인 후
-#   - 실물은 없다 → 시뮬 전용 프로필 (sim 만 정의)
+# 모델 출처: https://github.com/wirobotics-rih/allex_model (BSD-3-Clause). scripts/get_allex.sh 가 third_party/ 에 받는다.
+#   - 48 자유도(액추에이터) = 오른팔 7 + 오른손 15 + 왼팔 7 + 왼손 15 + 허리 2 + 목 2. 액추에이터는 전부 position 서보(kp·kv)라
+#     SO-101 과 똑같이 "목표 각도를 ctrl 에 쓴다"로 움직인다 → 제어 코드(control_step.cpp)·노드는 바꾸지 않는다.
+#   - 모델 관절은 60개지만 12개(손가락 DIP·IP, 허리 링크)는 등식 제약으로 따라 움직이는 수동 관절이라 명령 대상이 아니다.
+#     그래서 mujoco.joints 를 반드시 적는다 (비워 두면 "모델 순서대로 앞 48개"가 되어 수동 관절이 섞인다).
+#   - 모델 timestep 은 2 ms. 제어 주기 1 ms 보다 크므로 백엔드가 걸음을 1 ms 로 줄여 맞춘다(올림 규칙).
+#   - 실물은 없다 → 시뮬 전용 프로필 (sim 만 정의).
+# 이름 순서는 MJCF 의 액추에이터 순서 그대로다. 우리 쪽(ROS 토픽) 이름도 같은 것을 쓴다.
 # ---------------------------------------------------------------------------
 name: allex
-dof: null                  # 모델에서 읽어 채움
-joints: []                 # 모델에서 읽어 채움
+dof: 48
+joints: &allex_joints
+  - R_Shoulder_Pitch_Joint
+  - R_Shoulder_Roll_Joint
+  - R_Shoulder_Yaw_Joint
+  - R_Elbow_Joint
+  - R_Wrist_Yaw_Joint
+  - R_Wrist_Roll_Joint
+  - R_Wrist_Pitch_Joint
+  - R_Thumb_Yaw_Joint
+  - R_Thumb_CMC_Joint
+  - R_Thumb_MCP_Joint
+  - R_Index_ABAD_Joint
+  - R_Index_MCP_Joint
+  - R_Index_PIP_Joint
+  - R_Middle_ABAD_Joint
+  - R_Middle_MCP_Joint
+  - R_Middle_PIP_Joint
+  - R_Ring_ABAD_Joint
+  - R_Ring_MCP_Joint
+  - R_Ring_PIP_Joint
+  - R_Little_ABAD_Joint
+  - R_Little_MCP_Joint
+  - R_Little_PIP_Joint
+  - L_Shoulder_Pitch_Joint
+  - L_Shoulder_Roll_Joint
+  - L_Shoulder_Yaw_Joint
+  - L_Elbow_Joint
+  - L_Wrist_Yaw_Joint
+  - L_Wrist_Roll_Joint
+  - L_Wrist_Pitch_Joint
+  - L_Thumb_Yaw_Joint
+  - L_Thumb_CMC_Joint
+  - L_Thumb_MCP_Joint
+  - L_Index_ABAD_Joint
+  - L_Index_MCP_Joint
+  - L_Index_PIP_Joint
+  - L_Middle_ABAD_Joint
+  - L_Middle_MCP_Joint
+  - L_Middle_PIP_Joint
+  - L_Ring_ABAD_Joint
+  - L_Ring_MCP_Joint
+  - L_Ring_PIP_Joint
+  - L_Little_ABAD_Joint
+  - L_Little_MCP_Joint
+  - L_Little_PIP_Joint
+  - Waist_Yaw_Joint
+  - Waist_Lower_Pitch_Joint
+  - Neck_Pitch_Joint
+  - Neck_Yaw_Joint
+
 loop_hz:
-  sim: 1000
+  sim: 1000      # 1 kHz. 48 자유도 물리 한 주기 비용은 test_mujoco_backend 가 p50/p99/max 로 찍는다
+
 backend:
   sim: mujoco
+
 mujoco:
-  model: third_party/allex_model/mjcf/scene.xml   # 경로는 저장소 구조 확인 후 수정
+  model: third_party/allex_model/mjcf/scene.xml
+  joints: *allex_joints      # 위 joints 와 같은 목록(모델 안의 관절 이름). 틀리면 노드가 모델의 관절 이름 전체를 출력한다
+
+sim_lag:
+  time_constant_s: 0.05  # MuJoCo 가 없는 PC 에서 1차 지연 모델로 돌릴 때만 쓴다
+
+# 관절 한계(rad)는 모델의 ctrlrange 에 있다 (예: R_Shoulder_Pitch −3.316 ~ 1.745). 노드에 싣는 것은 다음 단계. 아래는 자리만.
 limits_rad: {}
+
 safety:
-  watchdog_ms: 50
-  max_step_rad: 0.05
+  watchdog_ms: 50      # 명령이 이 시간 동안 끊기면 현재 위치 유지(시뮬) — 실물은 safe_stop
+  max_step_rad: 0.05   # 한 주기 최대 목표 변화량. 손가락 관절에도 같은 값 — 관절별 값은 다음 단계

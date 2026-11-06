@@ -108,9 +108,26 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/third_party/mujoco/lib
         run: ctest --test-dir build/rt_core_mj --output-on-failure -R mujoco
 
+      # 같은 테스트를 위로보틱스 공개 모델 ALLEX(48 자유도)로 — 제어 코드·백엔드는 그대로, 프로필의 관절 이름만 넘긴다.
+      - name: Download ALLEX model (WIRobotics, BSD-3, pinned commit)
+        run: bash scripts/get_allex.sh
+
+      - name: MuJoCo backend test — ALLEX 48 DOF (headless, 1 kHz x 2000 cycles)
+        env:
+          RT_MUJOCO_MODEL: ${{ github.workspace }}/third_party/allex_model/mjcf/scene.xml
+          RT_MUJOCO_DOF: "48"
+          RT_MUJOCO_OUT: mujoco_backend_allex_ci.json
+          LD_LIBRARY_PATH: ${{ github.workspace }}/third_party/mujoco/lib
+        run: |
+          pip install --quiet pyyaml
+          export RT_MUJOCO_JOINTS="$(python3 scripts/profile_joints.py robots/allex.yaml)"
+          cd build/rt_core_mj && ./test_mujoco_backend
+
       - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: mujoco-ci
-          path: build/rt_core_mj/mujoco_backend_ci.json
+          path: |
+            build/rt_core_mj/mujoco_backend_ci.json
+            build/rt_core_mj/mujoco_backend_allex_ci.json
           if-no-files-found: ignore

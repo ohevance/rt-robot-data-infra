@@ -66,3 +66,31 @@ MujocoBackend: 모델에 관절 'Rotation' 가 없음
 ## 안 하는 것
 - 화면(렌더링) 없음. 눈으로 보고 싶으면 별도로 `python3 -m mujoco.viewer --mjcf third_party/mujoco_menagerie/trs_so_arm100/scene.xml` (pip install mujoco).
 - 토크 제어·중력 보상 없음. 모델의 position 액추에이터(kp)에 목표 각만 넣는다.
+
+## 5. ALLEX — 위로보틱스 공개 모델(48 자유도)을 같은 노드로 (E21)
+회사가 2026-06-29 공개한 상체 휴머노이드 모델(`github.com/wirobotics-rih/allex_model`, BSD-3). 액추에이터 48개가 전부 position 서보라
+SO-101 과 똑같은 방식으로 붙는다. 바뀌는 것은 프로필(`robots/allex.yaml`)뿐 — 제어 코드·백엔드·노드는 그대로다.
+
+```bash
+# [WSL 창] 1) 모델 받기 (약 250 MB, 고정 커밋 5e12052) — third_party/allex_model (gitignore)
+bash scripts/get_allex.sh
+#    출력 끝에  position actuators : 48  이 보이면 프로필(dof 48)과 맞는 것
+
+# [WSL 창] 2) rt_core 테스트 (ROS 2 없이). 빌드는 §2 의 build/rt_core_mj 를 그대로 쓴다 (테스트 코드가 바뀌었으니 한 번 더 빌드)
+cmake --build build/rt_core_mj -j
+RT_MUJOCO_MODEL=$PWD/third_party/allex_model/mjcf/scene.xml RT_MUJOCO_DOF=48 \
+RT_MUJOCO_JOINTS="$(python3 scripts/profile_joints.py robots/allex.yaml)" RT_MUJOCO_OUT=mujoco_backend_allex_wsl.json \
+LD_LIBRARY_PATH=$PWD/third_party/mujoco/lib ./build/rt_core_mj/test_mujoco_backend
+#    기대: "관절 0 (R_Shoulder_Pitch_Joint): 시작 … → 2초 뒤 … (움직임 0.2xx)" 와 "한 주기 비용 (mj_step x 1 + read, 48 관절): p50 … p99 … max …" 그리고 OK: mujoco_backend
+#    결과 JSON 은 현재 폴더의 mujoco_backend_allex_wsl.json → docs/measurements/ 로 옮겨 커밋 (E21.md 3절 표에 숫자 기입)
+
+# [WSL 창] 3) ROS 2 노드에서 (§3 과 같은 빌드, 파라미터 파일만 ALLEX 로)
+source install/setup.bash
+./install/rt_control_ros2/lib/rt_control_ros2/rt_control_node --ros-args --params-file rt_control/ros2_adapter/config/allex_mujoco.params.yaml
+#    다른 터미널: 48개 값 명령 (첫 관절 R_Shoulder_Pitch 만 0.3 rad, 나머지 0) 을 50 Hz 로
+ros2 topic pub -r 50 /joint_command sensor_msgs/msg/JointState "{position: [0.3, $(python3 -c 'print(", ".join(["0.0"]*47))')]}"
+#    또 다른 터미널: rt_status 의 work_us(제어 + 48 자유도 물리) 와 state 를 본다
+ros2 topic echo /rt_status
+```
+관절 이름이 틀리면 §4 와 같은 메시지가 나오고 모델의 관절 이름 전체가 출력된다 — `robots/allex.yaml` 의 `mujoco.joints` 를 그 이름으로 맞춘다.
+모델 timestep 은 2 ms 지만 제어 주기 1 ms 보다 커서 백엔드가 걸음을 1 ms 로 줄여 맞춘다(올림 규칙, `tune_timestep`). 기록 파이프라인(E20)도 `data_pipeline/record.sh` 그대로 — 관절 48개 CSV 가 나온다.

@@ -11,7 +11,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | ① 실시간 Linux 미들웨어, ROS 2/DDS | `rt_control/rt_core` RT 루프 + 측정기 + 제어 단계 + 상태 머신, `rt_control/ros2_adapter` ROS 2 노드, `dds_bench` | 표① 지연·지터 (p99.9/max) · 표② DDS 손실·지연 · 노드 `rt_status`(wake/work us, state) | 작성 완료, WSL 실행 확인(노드·DDS). **Pi 4 실측 완료(11/04~05)**: 일반 → PREEMPT_RT → 고정 → 격리, `table1_pi4.md` |
 | ② 실시간 로깅·모니터링·시각화·업데이트 | `fleet` 수집 → TimescaleDB → Grafana(14 패널), OTA 단계 배포·헬스 게이트·자동 롤백, 장애 주입 4종 | 표③-1 처리량·전달 지연 · 표③-2 장애 감지·복구·유실 · 표③-3 OTA 롤백 시간 | 완료 — WSL 실측(11/04 표③-2·③-3), CI 러너에서도 매 push 재실행 |
 | ③ 센서 스트리밍·로깅·전처리 자동화 | `fleet` 장치 에이전트(가상 50 + RT 노드 1), store-and-forward, 수집기 backlog, QoS 0/1 · **`data_pipeline`** 로봇 안 100 Hz 기록(rosbag2 MCAP) → CSV → 검증 요약 | 초당 메시지, 전달 지연 p95, 유실 % · 기록 실제 Hz·틈·추종 오차 | 작성 완료, WSL 실행 확인(기록 11/05) |
-| ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스) | CI 배지, 테스트 수(C++ 5 · Python 15 · 통합 1), 물리 한 주기 비용 p99 | 완료, CI 초록 |
+| ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100 6 자유도 · **위로보틱스 공개 ALLEX 48 자유도**, 프로필만 다름), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스 ×2 모델) | CI 배지, 테스트 수(C++ 5 · Python 15 · 통합 1), 물리 한 주기 비용 p99(6 · 48 자유도) | 완료, CI 초록 — ALLEX 는 E21(첫 실행 뒤 숫자 기입) |
 
 ## 숫자 한눈에 (2026-11-04 기준 — 어디서 잰 값인지가 숫자만큼 중요하다)
 
@@ -50,7 +50,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 - `scripts/` — `cyclictest_run.sh` · **`jitter_run.sh`**(표① 측정 한 줄, 온도·스로틀 기록), `make_table1/2/3.py`(표), `profile_to_params.py`(로봇 프로필 → ROS 파라미터, 백엔드 선택), **`get_mujoco.sh`**(MuJoCo + Menagerie 모델)
 - `.github/workflows/ci.yml` — 3잡: 빌드·단위 테스트·1 kHz 연기 테스트 → 진짜 컨테이너 통합(장애 3종 + OTA) · MuJoCo 헤드리스
 - `data_pipeline/` — 로봇 안 고주기 데이터 기록(rosbag2 MCAP) → CSV → 검증 요약(주기·틈·추종 오차)
-- `robots/` — 로봇 프로필(SO-101 · ALLEX 자리) · `backends/mujoco/README.md` — MuJoCo 설치·실행
+- `robots/` — 로봇 프로필(SO-101 6 자유도 · **ALLEX 48 자유도**, 위로보틱스 공개 모델 `scripts/get_allex.sh`) · `backends/mujoco/README.md` — MuJoCo 설치·실행, ALLEX 는 §5
 - `docs/` — 읽기 가이드(26 항목) · **실험 목록**(한 표) · 구조 · 용어집 · 결정 기록 · 작업 로그 · 설치 안내 · `measurements/`(표①②③ 원본 JSON·txt)
 
 ## 빠르게 돌려보기
