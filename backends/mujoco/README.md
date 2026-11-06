@@ -78,12 +78,12 @@ bash scripts/get_allex.sh
 
 # [WSL 창] 2) rt_core 테스트 (ROS 2 없이). 빌드는 §2 의 build/rt_core_mj 를 그대로 쓴다 (테스트 코드가 바뀌었으니 한 번 더 빌드)
 cmake --build build/rt_core_mj -j
-#    주기는 프로필과 같은 500 Hz(RT_MUJOCO_PERIOD_US=2000). 1 kHz 로 재려면 1000 — E21 의 1차 측정이 그것(p50 336 / p99 622 / max 1,785 us)
+#    주기는 프로필과 같은 500 Hz(RT_MUJOCO_PERIOD_US=2000). 1 kHz 로 재려면 1000 (E21 1차)
 RT_MUJOCO_MODEL=$PWD/third_party/allex_model/mjcf/scene.xml RT_MUJOCO_DOF=48 RT_MUJOCO_PERIOD_US=2000 \
 RT_MUJOCO_JOINTS="$(python3 scripts/profile_joints.py robots/allex.yaml)" RT_MUJOCO_OUT=mujoco_backend_allex_wsl_500hz.json \
 LD_LIBRARY_PATH=$PWD/third_party/mujoco/lib ./build/rt_core_mj/test_mujoco_backend
 #    기대: "관절 0 (R_Shoulder_Pitch_Joint): 시작 … → 2초 뒤 … (움직임 0.29x)" 와 "한 주기 비용 (mj_step x 1 + read, 48 관절): p50 … p99 … max …  (주기 2000 us)" 그리고 OK: mujoco_backend
-#    500 Hz 에서도 한 주기의 물리 비용은 1 kHz 때와 같다(mj_step 1번) — 달라지는 것은 예산(2 ms)이다
+#    E21 실측(WSL): 1 kHz 336 / 622 / 1,785 → 500 Hz 327 / 1,000 / 1,589 us. p50 은 같고 p99 는 더 컸다(2 ms 의 50%) — 이유 후보와 반복 계획은 E21 4절
 #    결과 JSON 은 현재 폴더 → docs/measurements/ 로 옮겨 커밋 (E21.md 3절 표에 숫자 기입). JSON 의 모델 경로는 third_party/ 부터만 적힌다(개인 경로 안 남김)
 
 # [WSL 창] 3) ROS 2 노드에서 (§3 과 같은 빌드, 파라미터 파일만 ALLEX 로)

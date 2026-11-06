@@ -63,8 +63,9 @@ joints: &allex_joints
   - Neck_Yaw_Joint
 
 loop_hz:
-  sim: 500       # 모델 기본 걸음 2 ms 와 같게. 1 kHz 로 재 보니(E21, WSL) 48 자유도 물리 한 주기가 p50 336 / p99 622 / max 1,785 us —
-                 # 1 ms 예산의 62%(p99)를 쓰고 max 는 1 ms 를 넘겼다. 2 ms 예산이면 p99 는 31%. 주기는 여기 숫자 하나다(DECISIONS 11/06).
+  sim: 500       # 모델 기본 걸음 2 ms 와 같게. 1 kHz 로 재 보니(E21) 48 자유도 물리 한 주기가 WSL p50 336 / p99 622 / max 1,785 us,
+                 # 러너 382 / 458 / 609 — p99 만으로 1 ms 예산의 46~62% 가 사라진다. 500 Hz 실측(WSL)은 327 / 1,000 / 1,589 = 2 ms 의 50%(p99).
+                 # 주기는 여기 숫자 하나다(DECISIONS 11/06 — 버린 대안과 "31% 어림이 틀린" 기록까지).
 
 backend:
   sim: mujoco

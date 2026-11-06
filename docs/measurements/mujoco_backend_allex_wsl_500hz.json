@@ -1,0 +1,15 @@
+{
+ "model": "third_party/allex_model/mjcf/scene.xml",
+ "dof": 48,
+ "period_us": 2000,
+ "cycles": 1000,
+ "substeps": 1,
+ "step_us": {
+  "p50": 326.7,
+  "p99": 999.8,
+  "max": 1589.4
+ },
+ "joint0": "R_Shoulder_Pitch_Joint",
+ "joint0_moved_rad": 0.2976,
+ "env": "WSL2 Ubuntu 24.04, 2026-11-06, test_mujoco_backend 가 쓴 JSON 그대로 (patch-24 빌드)"
+}

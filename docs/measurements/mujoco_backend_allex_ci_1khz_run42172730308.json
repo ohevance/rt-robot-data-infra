@@ -1,0 +1,15 @@
+{
+ "model": "third_party/allex_model/mjcf/scene.xml",
+ "dof": 48,
+ "period_us": 1000,
+ "cycles": 2000,
+ "substeps": 1,
+ "step_us": {
+  "p50": 381.5,
+  "p99": 457.8,
+  "max": 608.9
+ },
+ "joint0": "R_Shoulder_Pitch_Joint",
+ "joint0_moved_rad": 0.2976,
+ "env": "GitHub Actions ubuntu-24.04 러너, run 42172730308 (2026-11-06, patch-23 시점의 1 kHz 단계) 아티팩트 mujoco-ci 에서 복사. 원본 model 경로는 러너 작업 폴더 — third_party/ 부터로 줄였다"
+}

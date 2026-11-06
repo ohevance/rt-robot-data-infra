@@ -13,6 +13,8 @@
 | `table3_ci.md` | 표③, GitHub 러너에서 (10대 2 Hz) | CI `fleet_integration` 아티팩트 | ubuntu-24.04 러너 |
 | `mujoco_backend_ci.json` | MuJoCo 물리 한 주기 비용 | CI `mujoco` 아티팩트 (`test_mujoco_backend`) | ubuntu-24.04 러너 |
 | `mujoco_backend_allex_wsl_1khz.json` | 같은 것, ALLEX 48 자유도(1 kHz 첫 측정, E21) | `test_mujoco_backend` 출력에서 전사 | WSL2 Ubuntu 24.04 |
+| `mujoco_backend_allex_wsl_500hz.json` | 같은 것, ALLEX 500 Hz(프로필 기본, 1,000주기) | `test_mujoco_backend` 가 쓴 JSON | WSL2 Ubuntu 24.04 |
+| `mujoco_backend_allex_ci_1khz_run42172730308.json` | 같은 것, ALLEX 1 kHz | CI run 42172730308 아티팩트 `mujoco-ci` 복사(경로만 줄임) | ubuntu-24.04 러너 |
 | `jitter_pi4_generic_{idle,stress}.json` (+`.meta`) | 1 kHz 루프 지연, 일반 커널 기준값 | `jitter_bench --prio 80 --seconds 60` (11/04 은 손으로, 이후는 `scripts/jitter_run.sh`) | **Pi 4B**, Ubuntu 24.04 `6.8.0-1064-raspi`, RT 아님 |
 | `cyclictest_pi4_generic_{idle,stress}.txt` (+`.meta`) | 표준 도구 지연 히스토그램, 일반 커널 기준값 | `scripts/cyclictest_run.sh <label> 300` / `120 stress` | Pi 4B, 일반 커널. `.meta` 에 온도·스로틀 |
 | `table1_pi4.md` | 표① Pi 4 (일반 → RT 비교표) | `scripts/make_table1.py --cyclictest 'docs/measurements/cyclictest_pi4_*.txt' --jitter 'docs/measurements/jitter_pi4_*.json'` | — |
