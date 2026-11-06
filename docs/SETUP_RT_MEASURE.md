@@ -63,7 +63,7 @@ sudo scripts/cyclictest_run.sh pi4_generic_stress 120 stress        # 방열판 
 ## 5. 실시간 커널 켜기 (10분 + 재부팅) — 완료 11/05: `6.8.0-2054-raspi-realtime`, `/sys/kernel/realtime` = 1
 Ubuntu Pro 개인 구독은 무료(기기 5대). 토큰을 받는 길:
 1. PC 브라우저 **시크릿 창**에서 `login.ubuntu.com/+new_account` → Ubuntu One 가입(이메일·영문 이름·소문자 사용자명·비밀번호) → 인증 메일 링크.
-2. `ubuntu.com/pro/dashboard` → Sign in → **Free Personal Token** `C1…` 복사. (토큰은 채팅·문서에 적지 않는다.)
+2. `ubuntu.com/pro/dashboard` → Sign in → **Free Personal Token**(긴 문자열) 복사. (토큰은 채팅·문서·영상에 적지 않는다.)
 - 11/04 함정: 가입이 "Oops" / *"Dry run of setting username(...) in Launchpad failed with (The read operation timed out)"* 로 실패 = Canonical 의 Launchpad 가 응답하지 않은 것. 입력값 문제가 아니다 → 30분~반나절 뒤 재시도. `ubuntu.com/pro` 에서 시작하면 되돌아오는 단계에서 또 깨지므로 `login.ubuntu.com` 에서 직접 가입한다.
 ```bash
 # [Pi 창]

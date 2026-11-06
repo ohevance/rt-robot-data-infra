@@ -71,7 +71,7 @@ python3 fleet/tests/test_fleet_logic.py && python3 fleet/tests/test_ota_rollout.
 - 실험 목록(순서도 + 한 표): [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) · 실험별 상세(왜·결과·처음 읽는 사람을 위한 분석): [`docs/experiments/`](docs/experiments/README.md)
 - 왜 이렇게 했나: [`docs/DECISIONS.md`](docs/DECISIONS.md) · 깨진 것과 해결(시간순): [`docs/LOG.md`](docs/LOG.md)
 - 설치: WSL 개발 [`docs/SETUP_WSL.md`](docs/SETUP_WSL.md) · 표① 실측(Pi 4 + PREEMPT_RT) [`docs/SETUP_RT_MEASURE.md`](docs/SETUP_RT_MEASURE.md)
-- 발표 자료: 2분 영상 대본 [`docs/VIDEO_SCRIPT.md`](docs/VIDEO_SCRIPT.md) · 이력서 문장 [`docs/RESUME_LINES.md`](docs/RESUME_LINES.md) · 인수인계 [`docs/HANDOVER.md`](docs/HANDOVER.md)
+- 발표 자료: 2분 영상 대본 [`docs/VIDEO_SCRIPT.md`](docs/VIDEO_SCRIPT.md) · 이력서 문장 [`docs/RESUME_LINES.md`](docs/RESUME_LINES.md) · 작업 상태 요약 [`docs/HANDOVER.md`](docs/HANDOVER.md)
 
 ## 작성 방식
 설계·검토·측정·해석은 작성자(오문규). 코드 초안과 스크립트·설정 템플릿은 AI 도구(Claude)의 보조로 작성했고,
