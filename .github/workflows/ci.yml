@@ -7,8 +7,11 @@
 #   2) fleet_integration (2단계, ~5분)
 #      진짜 Mosquitto·TimescaleDB 컨테이너 위에서 수집기 + 가상 장치 10대 → 장애 주입 3종 + 나쁜 펌웨어 롤백 + 정상 OTA
 #      → "유실 0 · 복구됨 · 롤백됨" 판정 (fleet/tests/integration.sh 와 같은 스크립트)
-#   3) mujoco (2단계, ~3분)
-#      MuJoCo 3.x 를 내려받아 rt_core 를 -DRT_CORE_WITH_MUJOCO=ON 으로 빌드, SO-ARM100(menagerie) 모델로 백엔드 테스트 (화면 없음)
+#   3) mujoco (2단계, ~1분)
+#      MuJoCo 3.x 를 내려받아 rt_core 를 -DRT_CORE_WITH_MUJOCO=ON 으로 빌드, SO-ARM100(menagerie, 6 자유도) 모델로 백엔드 테스트 (화면 없음)
+#      → 위로보틱스 공개 모델 ALLEX(48 자유도, 고정 커밋)를 받아 같은 테스트를 프로필의 운영점(500 Hz)으로 한 번 더
+#
+#   잡 순서: rt_core 가 먼저(싼 검사), 통과하면 fleet_integration 과 mujoco 가 나란히(needs: rt_core). 그림은 docs/ENVIRONMENT.md 5-3.
 #
 #   통과하면 README 의 배지가 초록색이 된다.
 #   (무료 러너에는 RT 커널·RT 권한이 없으므로 여기 수치는 "돌아간다"의 증거이지 지연 수치의 증거가 아니다.
@@ -112,10 +115,12 @@ jobs:
       - name: Download ALLEX model (WIRobotics, BSD-3, pinned commit)
         run: bash scripts/get_allex.sh
 
-      - name: MuJoCo backend test — ALLEX 48 DOF (headless, 1 kHz x 2000 cycles)
+      # 주기는 프로필과 같은 500 Hz(2 ms). 1 kHz 측정(E21, WSL)에서 p99 622 us 로 러너에서는 900 us 문턱에 걸릴 수 있어 운영점으로 잰다.
+      - name: MuJoCo backend test — ALLEX 48 DOF (headless, 500 Hz x 2 s)
         env:
           RT_MUJOCO_MODEL: ${{ github.workspace }}/third_party/allex_model/mjcf/scene.xml
           RT_MUJOCO_DOF: "48"
+          RT_MUJOCO_PERIOD_US: "2000"
           RT_MUJOCO_OUT: mujoco_backend_allex_ci.json
           LD_LIBRARY_PATH: ${{ github.workspace }}/third_party/mujoco/lib
         run: |

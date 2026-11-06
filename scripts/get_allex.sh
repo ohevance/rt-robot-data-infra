@@ -26,7 +26,7 @@ else
   git -C "$DEST" checkout -q FETCH_HEAD
 fi
 
-# 프로필(robots/allex.yaml)과 맞는지 눈으로 확인할 숫자: 관절 60(수동 12 포함) · position 액추에이터 48
-echo "joints : $(grep -c '<joint ' "$DEST/mjcf/ALLEX.xml")  (수동 관절·등식 제약 포함)"
+# 프로필(robots/allex.yaml)과 맞는지 눈으로 확인할 숫자: 관절 60(수동 12 포함, 백엔드가 nq=60 으로 출력) · position 액추에이터 48
+echo "joint 태그 : $(grep -c '<joint ' "$DEST/mjcf/ALLEX.xml")  (등식 제약의 <joint …> 12개가 섞여 실제 관절 60 보다 많이 나온다)"
 echo "position actuators : $(grep -c '<position ' "$DEST/mjcf/ALLEX.xml")  (= robots/allex.yaml 의 dof)"
-echo "timestep : $(grep -o 'timestep="[^"]*"' "$DEST/mjcf/ALLEX.xml")  (제어 주기 1 ms 보다 커서 백엔드가 1 ms 로 맞춘다)"
+echo "timestep : $(grep -o 'timestep="[^"]*"' "$DEST/mjcf/ALLEX.xml")  (= 2 ms. 프로필의 500 Hz 와 같다; 1 kHz 로 돌리면 백엔드가 1 ms 로 줄인다)"

@@ -50,7 +50,7 @@ rt_control_node:
     - Waist_Lower_Pitch_Joint
     - Neck_Pitch_Joint
     - Neck_Yaw_Joint
-    loop_hz: 1000
+    loop_hz: 500
     prio: 80
     cpu: -1
     watchdog_ms: 50

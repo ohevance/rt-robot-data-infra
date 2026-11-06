@@ -132,9 +132,10 @@ flowchart LR
     b2 --> b3["수집기(QoS 1) + 가상 장치 10대 2 Hz"] --> b4["장애 주입 broker·db·collector 5초 + 나쁜 펌웨어 + 정상 OTA"]
     b4 --> b5["assert_results.py: 유실 0 · 복구됨 · 롤백됨"] --> b6["table3_ci.md → 아티팩트 fleet-integration"]
   end
-  subgraph R3["잡 mujoco (러너 VM 3, 약 30초)"]
+  subgraph R3["잡 mujoco (러너 VM 3, 약 45초)"]
     direction TB
-    c1["get_mujoco.sh 3.3.2 + menagerie SO-ARM100"] --> c2["cmake -DRT_CORE_WITH_MUJOCO=ON"] --> c3["ctest mujoco: 2,000주기 움직임 + 비용 p99 < 900 us"] --> c4["아티팩트 mujoco-ci"]
+    c1["get_mujoco.sh 3.3.2 + menagerie SO-ARM100"] --> c2["cmake -DRT_CORE_WITH_MUJOCO=ON"] --> c3["ctest mujoco: SO-ARM100 6 자유도, 1 kHz 2,000주기 움직임 + 비용 p99 < 900 us"]
+    c3 --> c3b["get_allex.sh (ALLEX 48 자유도, 고정 커밋 5e12052) → 같은 테스트를 500 Hz 1,000주기, p99 < 1,800 us (E21)"] --> c4["아티팩트 mujoco-ci (JSON 2개)"]
   end
   R2 --> OK["3개 모두 ✓ → README 배지 초록"]
   R3 --> OK

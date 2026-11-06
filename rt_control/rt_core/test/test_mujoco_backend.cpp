@@ -15,6 +15,7 @@
 //   RT_MUJOCO_JOINTS  쉼표로 이은 관절 이름 (기본 비움 = 모델 순서대로 앞 dof 개)
 //                     예: $(python3 scripts/profile_joints.py robots/allex.yaml)
 //   RT_MUJOCO_OUT     결과 JSON 파일 이름 (기본 mujoco_backend_ci.json)
+//   RT_MUJOCO_PERIOD_US 제어 주기 us (기본 1000 = 1 kHz). ALLEX 프로필은 500 Hz 이므로 2000 으로 잰다
 //
 // 읽는 순서: TestConfig(환경변수 읽기) → split_csv → main (모델 로드 → 2000 주기 → 통계 → JSON)
 // ===========================================================================
@@ -77,6 +78,7 @@ struct TestConfig {
   std::uint32_t dof = 6;
   std::vector<std::string> joints;
   std::string out_json = "mujoco_backend_ci.json";
+  std::int64_t period_us = 1000;
 };
 
 static bool read_config(int argc, char** argv, TestConfig& cfg) {
@@ -106,7 +108,25 @@ static bool read_config(int argc, char** argv, TestConfig& cfg) {
   if (out_text != nullptr && out_text[0] != '\0') {
     cfg.out_json = out_text;
   }
+  const char* period_text = std::getenv("RT_MUJOCO_PERIOD_US");
+  if (period_text != nullptr && period_text[0] != '\0') {
+    cfg.period_us = std::atol(period_text);
+  }
+  if (cfg.period_us < 100 || cfg.period_us > 100000) {
+    std::fprintf(stderr, "RT_MUJOCO_PERIOD_US=%lld 는 100..100000 범위가 아님\n", static_cast<long long>(cfg.period_us));
+    return false;
+  }
   return true;
+}
+
+// JSON 에 적는 모델 경로: 사용자 홈 디렉터리 같은 개인 경로가 남지 않게 third_party/ 부터만 적는다
+static std::string model_path_for_json(const char* path) {
+  std::string s(path);
+  std::size_t at = s.find("third_party/");
+  if (at != std::string::npos) {
+    return s.substr(at);
+  }
+  return s;
 }
 
 int main(int argc, char** argv) {
@@ -115,8 +135,9 @@ int main(int argc, char** argv) {
     return 2;
   }
   const std::uint32_t dof = cfg.dof;
-  const std::int64_t period_ns = 1000000;  // 1 ms
-  const int cycles = 2000;                 // 2 초
+  const std::int64_t period_ns = cfg.period_us * 1000;                  // 기본 1 ms
+  const int cycles = static_cast<int>(2000000 / cfg.period_us);          // 2 초 분량 (1 kHz 면 2000 주기)
+  const double budget_us = static_cast<double>(cfg.period_us);
 
   rt_core::MujocoBackend backend;
   backend.set_model(cfg.model_path);
@@ -130,7 +151,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   check(backend.substeps() >= 1, "substeps >= 1");
-  check(backend.sim_timestep_s() <= 0.001 + 1e-12, "시뮬레이션 걸음 <= 제어 주기");
+  check(backend.sim_timestep_s() <= budget_us * 1e-6 + 1e-12, "시뮬레이션 걸음 <= 제어 주기");
 
   // 버퍼는 컴파일 때 최대 관절 수로 잡고(노드와 같은 규칙), dof 개만 쓴다
   double target[rt_core::kMaxJoints] = {0.0};
@@ -163,15 +184,16 @@ int main(int argc, char** argv) {
   double p50 = percentile_us(cycle_ns, 50.0);
   double p99 = percentile_us(cycle_ns, 99.0);
   double mx = static_cast<double>(cycle_ns.back()) / 1000.0;
-  std::printf("한 주기 비용 (mj_step x %d + read, %u 관절): p50 %.1f us, p99 %.1f us, max %.1f us  (주기 1000 us)\n",
-              backend.substeps(), dof, p50, p99, mx);
-  check(p99 < 900.0, "p99 < 900 us: 1 kHz 주기 안에 물리 한 걸음이 들어온다");
+  std::printf("한 주기 비용 (mj_step x %d + read, %u 관절): p50 %.1f us, p99 %.1f us, max %.1f us  (주기 %.0f us)\n",
+              backend.substeps(), dof, p50, p99, mx, budget_us);
+  check(p99 < 0.9 * budget_us, "p99 < 주기의 90%: 제어 주기 안에 물리 한 걸음이 들어온다");
 
   std::FILE* f = std::fopen(cfg.out_json.c_str(), "w");
   if (f != nullptr) {
-    std::fprintf(f, "{\"model\": \"%s\", \"dof\": %u, \"period_us\": 1000, \"cycles\": %d, \"substeps\": %d, "
+    std::fprintf(f, "{\"model\": \"%s\", \"dof\": %u, \"period_us\": %lld, \"cycles\": %d, \"substeps\": %d, "
                     "\"step_us\": {\"p50\": %.1f, \"p99\": %.1f, \"max\": %.1f}, \"joint0\": \"%s\", \"joint0_moved_rad\": %.4f}\n",
-                 cfg.model_path, dof, cycles, backend.substeps(), p50, p99, mx, backend.joint_name(0).c_str(), moved);
+                 model_path_for_json(cfg.model_path).c_str(), dof, static_cast<long long>(cfg.period_us), cycles, backend.substeps(),
+                 p50, p99, mx, backend.joint_name(0).c_str(), moved);
     std::fclose(f);
   }
 

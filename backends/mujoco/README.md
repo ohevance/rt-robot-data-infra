@@ -67,7 +67,7 @@ MujocoBackend: 모델에 관절 'Rotation' 가 없음
 - 화면(렌더링) 없음. 눈으로 보고 싶으면 별도로 `python3 -m mujoco.viewer --mjcf third_party/mujoco_menagerie/trs_so_arm100/scene.xml` (pip install mujoco).
 - 토크 제어·중력 보상 없음. 모델의 position 액추에이터(kp)에 목표 각만 넣는다.
 
-## 5. ALLEX — 위로보틱스 공개 모델(48 자유도)을 같은 노드로 (E21)
+## 6. ALLEX — 위로보틱스 공개 모델(48 자유도)을 같은 노드로 (E21)
 회사가 2026-06-29 공개한 상체 휴머노이드 모델(`github.com/wirobotics-rih/allex_model`, BSD-3). 액추에이터 48개가 전부 position 서보라
 SO-101 과 똑같은 방식으로 붙는다. 바뀌는 것은 프로필(`robots/allex.yaml`)뿐 — 제어 코드·백엔드·노드는 그대로다.
 
@@ -78,19 +78,22 @@ bash scripts/get_allex.sh
 
 # [WSL 창] 2) rt_core 테스트 (ROS 2 없이). 빌드는 §2 의 build/rt_core_mj 를 그대로 쓴다 (테스트 코드가 바뀌었으니 한 번 더 빌드)
 cmake --build build/rt_core_mj -j
-RT_MUJOCO_MODEL=$PWD/third_party/allex_model/mjcf/scene.xml RT_MUJOCO_DOF=48 \
-RT_MUJOCO_JOINTS="$(python3 scripts/profile_joints.py robots/allex.yaml)" RT_MUJOCO_OUT=mujoco_backend_allex_wsl.json \
+#    주기는 프로필과 같은 500 Hz(RT_MUJOCO_PERIOD_US=2000). 1 kHz 로 재려면 1000 — E21 의 1차 측정이 그것(p50 336 / p99 622 / max 1,785 us)
+RT_MUJOCO_MODEL=$PWD/third_party/allex_model/mjcf/scene.xml RT_MUJOCO_DOF=48 RT_MUJOCO_PERIOD_US=2000 \
+RT_MUJOCO_JOINTS="$(python3 scripts/profile_joints.py robots/allex.yaml)" RT_MUJOCO_OUT=mujoco_backend_allex_wsl_500hz.json \
 LD_LIBRARY_PATH=$PWD/third_party/mujoco/lib ./build/rt_core_mj/test_mujoco_backend
-#    기대: "관절 0 (R_Shoulder_Pitch_Joint): 시작 … → 2초 뒤 … (움직임 0.2xx)" 와 "한 주기 비용 (mj_step x 1 + read, 48 관절): p50 … p99 … max …" 그리고 OK: mujoco_backend
-#    결과 JSON 은 현재 폴더의 mujoco_backend_allex_wsl.json → docs/measurements/ 로 옮겨 커밋 (E21.md 3절 표에 숫자 기입)
+#    기대: "관절 0 (R_Shoulder_Pitch_Joint): 시작 … → 2초 뒤 … (움직임 0.29x)" 와 "한 주기 비용 (mj_step x 1 + read, 48 관절): p50 … p99 … max …  (주기 2000 us)" 그리고 OK: mujoco_backend
+#    500 Hz 에서도 한 주기의 물리 비용은 1 kHz 때와 같다(mj_step 1번) — 달라지는 것은 예산(2 ms)이다
+#    결과 JSON 은 현재 폴더 → docs/measurements/ 로 옮겨 커밋 (E21.md 3절 표에 숫자 기입). JSON 의 모델 경로는 third_party/ 부터만 적힌다(개인 경로 안 남김)
 
 # [WSL 창] 3) ROS 2 노드에서 (§3 과 같은 빌드, 파라미터 파일만 ALLEX 로)
 source install/setup.bash
 ./install/rt_control_ros2/lib/rt_control_ros2/rt_control_node --ros-args --params-file rt_control/ros2_adapter/config/allex_mujoco.params.yaml
+#    노드는 프로필대로 500 Hz 로 돈다(allex_mujoco.params.yaml 의 loop_hz 500) — rt_status 의 work_us 는 2 ms 예산 기준으로 읽는다
 #    다른 터미널: 48개 값 명령 (첫 관절 R_Shoulder_Pitch 만 0.3 rad, 나머지 0) 을 50 Hz 로
 ros2 topic pub -r 50 /joint_command sensor_msgs/msg/JointState "{position: [0.3, $(python3 -c 'print(", ".join(["0.0"]*47))')]}"
 #    또 다른 터미널: rt_status 의 work_us(제어 + 48 자유도 물리) 와 state 를 본다
 ros2 topic echo /rt_status
 ```
 관절 이름이 틀리면 §4 와 같은 메시지가 나오고 모델의 관절 이름 전체가 출력된다 — `robots/allex.yaml` 의 `mujoco.joints` 를 그 이름으로 맞춘다.
-모델 timestep 은 2 ms 지만 제어 주기 1 ms 보다 커서 백엔드가 걸음을 1 ms 로 줄여 맞춘다(올림 규칙, `tune_timestep`). 기록 파이프라인(E20)도 `data_pipeline/record.sh` 그대로 — 관절 48개 CSV 가 나온다.
+모델 timestep 2 ms = 프로필의 500 Hz 주기 — `mj_step` 1번이 모델 기본 걸음 그대로다. 1 kHz 로 돌리면 백엔드가 걸음을 1 ms 로 줄인다(올림 규칙, `tune_timestep`) — E21 1차에서 p99 622 us(예산의 62 %)·max 1 ms 초과였고, 그래서 500 Hz 가 기본이다(DECISIONS 11/06). 기록 파이프라인(E20)도 `data_pipeline/record.sh` 그대로 — 관절 48개 CSV 가 나온다.

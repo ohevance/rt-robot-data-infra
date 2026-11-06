@@ -137,5 +137,5 @@
 
 ```
  push ──▶ [rt_core] 빌드·ctest 4·jitter 2초 드롭 0·fleet 가짜 테스트 3·대시보드 JSON ──┬──▶ [fleet_integration] 진짜 mqtt/db 컨테이너 + 장애 3종 + 롤백 + OTA → 판정
-                                                                              └──▶ [mujoco] MuJoCo 3.x 내려받아 빌드 → SO-ARM100 위 2000주기 테스트
+                                                                              └──▶ [mujoco] MuJoCo 3.x 내려받아 빌드 → SO-ARM100(6 자유도) 1 kHz 2000주기 → ALLEX(48 자유도, 위로보틱스 공개 모델) 500 Hz 1000주기
 ```

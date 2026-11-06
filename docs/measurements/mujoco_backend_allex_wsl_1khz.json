@@ -1,0 +1,15 @@
+{
+ "model": "third_party/allex_model/mjcf/scene.xml",
+ "dof": 48,
+ "period_us": 1000,
+ "cycles": 2000,
+ "substeps": 1,
+ "step_us": {
+  "p50": 336.2,
+  "p99": 622.0,
+  "max": 1784.5
+ },
+ "joint0": "R_Shoulder_Pitch_Joint",
+ "joint0_moved_rad": 0.298,
+ "env": "WSL2 Ubuntu 24.04, 2026-11-06, test_mujoco_backend 출력에서 전사 (moved 는 소수 3자리 출력값)"
+}
