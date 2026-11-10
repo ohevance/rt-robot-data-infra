@@ -191,3 +191,12 @@
 - 확인해 둘 것(Pi 커널): 자동 업데이트 목록에 일반 커널 `linux-image-raspi` 가 있다. 지금은 `6.8.0-2054-raspi-realtime` 으로 돌고 있고 RT 패키지는 목록에 없다. 재부팅 전에 다음 부팅 커널을 본다(deploy/ec2/README 4절) — 영상 촬영(11/12~13) 전에 반드시.
 - 남긴 것(안 고친 것): 브로커의 `per_listener_settings deprecated` 경고 — 인증 설정을 확인 없이 바꾸지 않는다. 서버에 반영하려면 `cd ~/rt-robot-data-infra && git pull && sudo docker compose -f fleet/docker-compose.yml -f fleet/docker-compose.prod.yml up -d --build`(수집기 재빌드, Grafana 재시작).
 - 배운 것: 스크립트 셋(`setup.sh`·`install.sh`·서비스 파일)은 샌드박스에서 문법과 인증서까지만 확인했고 실제 기계에서는 오늘이 처음이었다 — 여섯 가지가 나왔고 전부 "실제 기계에서만 보이는 것"(초기화 순서, 패키지 버전, OS 의 백그라운드 작업, 사람이 붙여 넣는 방식, 계속 켜 둔 서버)이었다. 한 번에 안 되는 것이 정상이고, 나온 것을 그날 스크립트에 되돌려 넣는 것이 일이다.
+
+## 2026-11-10 밤 — CI 가 3시간 빨강이었다: 산출물 OTA 가 러너에서 첫 장치부터 실패 (상대 경로 슬롯)
+- 증상: patch-31 push 뒤 `fleet_integration` X. 로그: 단계 4b 에서 `설치 실패 1대 ['ci-001'] — selftest 실패 (exit 127): bash: build/integration/devices/ci-001/slots/0.0.0-ci/selftest.sh: No such file or directory` → 롤백. 그 앞의 장애 주입 넷(broker·db·collector·bad_firmware)과 흉내 OTA 는 전부 통과(유실 0).
+- 오늘 고친 것 탓이 아니었다: `gh run list` 를 보니 **3시간 전 push(patch-26~30 을 한꺼번에) 때부터 빨강**이었다. 그 사이 AWS 작업을 하느라 CI 를 보지 않았다 — 11/05 에 "push 뒤 `gh run list` 는 문서 커밋이라도 본다"고 적어 놓고 같은 일을 했다.
+- 원인: 통합 테스트는 `--slot-root build/integration/devices`(상대 경로)를 준다. `ota_apply.selftest` 는 슬롯 안에서(`cwd=슬롯`) `bash <슬롯>/selftest.sh` 를 돌리는데, 슬롯 경로가 상대 경로면 "슬롯 안에서 다시 본 슬롯 경로"가 되어 파일이 없다. 단위 테스트(`test_ota_artifact`)는 `tempfile.mkdtemp`(절대 경로)만 써서 통과했고, 샌드박스의 끝-대-끝 확인도 절대 경로였다.
+- 고침: `install`·`selftest`·`post_switch` 가 경로를 절대 경로로 굳힌다. 테스트 1건 추가(작업 디렉터리를 옮기고 상대 경로 슬롯에 설치) — 고치기 전 코드에서 CI 와 **같은 오류 문장**으로 실패, 고친 뒤 통과. 릴리스 카나리(`release_canary.sh`)도 같은 상대 경로를 쓰므로 첫 태그 전에 잡힌 셈이다.
+- 확인 못 한 것: 4b 뒤의 4c(깨진 패키지 거부)와 판정 단계는 이 실패에 가려 러너에서 아직 돈 적이 없다. 이 환경에는 도커가 없어 통합 스크립트를 끝까지 돌려 보지 못했다 → 다음 CI 결과로 확인한다.
+- 배운 것: (1) 테스트가 쓰는 경로의 모양(절대/상대)이 실제 호출과 같아야 한다. (2) 여러 패치를 묶어 push 했으면 그 push 의 CI 를 반드시 본다 — 묶음이 클수록 더.
+- 덧붙임(같은 실수 두 번): 오늘 저녁 `setup.sh` 의 "pg_isready 가 초기화용 임시 서버에 속았다"는 **11/04 CI 에서 이미 겪고 `ENVIRONMENT.md` 실패 사례 표에 적어 둔 것**과 같은 원인이다. 그때는 통합 스크립트만 고쳤고 일주일 뒤 새 스크립트에 같은 대기 방식을 다시 썼다. 실패 사례 표는 적는 것으로 끝나지 않는다 — DB 를 기다리는 코드를 새로 쓸 때 그 표를 먼저 본다.

@@ -122,7 +122,7 @@ flowchart LR
     direction TB
     a1["apt: cmake g++ python3"] --> a2["cmake 빌드 rt_core"] --> a3["ctest 4: 링 버퍼 · 제어 단계 · 상태 머신 · 1 kHz 2초 드롭 0"]
     a3 --> a4["jitter_bench --no-rt 2초 → JSON → make_table1 (표① 생성기 동작 확인)"]
-    a4 --> a5["fleet 단위 테스트 4파일 25건 (가짜 브로커·DB)"] --> a6["대시보드 JSON 생성·파싱"] --> a7["아티팩트 jitter-ci"]
+    a4 --> a5["fleet 단위 테스트 4파일 26건 (가짜 브로커·DB)"] --> a6["대시보드 JSON 생성·파싱"] --> a7["아티팩트 jitter-ci"]
   end
   R1 -- needs --> R2
   R1 -- needs --> R3
@@ -168,6 +168,7 @@ flowchart LR
 |---|---|---|---|
 | 11/04 | TimescaleDB 첫 기동의 **임시 서버**에 `pg_isready` 가 속아 migrate 가 끊김 | WSL 볼륨엔 데이터가 이미 있어 init 단계가 없었다 | `LOG.md` "GitHub 첫 push · CI 1차", `experiments/E13.md` |
 | 11/05 | 수집기 `request_stop` 함수 삭제(`NameError`) — 수집기가 시작 직후 죽음 | 단위 테스트가 `main()` 을 안 탔고, WSL 에서 수집기를 다시 띄운 적이 없었다 | `LOG.md` 11/05, `test_collector_resilience` 에 main() 스모크 추가 |
+| 11/10 | 통합 4b(산출물 OTA) `selftest 실패 (exit 127) … selftest.sh: No such file` — 첫 장치에서 롤백 | 슬롯 디렉터리가 상대 경로(`build/integration/devices`)인데 자가 점검을 슬롯 안에서 돌려 스크립트 경로가 어긋남. 단위 테스트는 절대 경로만 썼다. **patch-26~30 을 한꺼번에 push 한 뒤 CI 를 보지 않아 3시간 빨강** | `LOG.md` 11/10 밤, `ota_apply` 경로를 절대 경로로, `test_ota_artifact` 에 상대 경로 슬롯 |
 
 배운 규칙: **문서 커밋이라도 push 뒤 `gh run list -L 1` 을 본다.** 11/05 에 측정·문서 push 를 연달아 하며 CI 를 안 봐서 빨간 상태로 몇 시간이 갔다.
 
@@ -218,7 +219,7 @@ flowchart LR
 |---|---|---|---|
 | C++ 단위(ctest) | `rt_control/rt_core/test/test_spsc_ring.cpp` · `test_control_step.cpp` · `test_state_machine.cpp` · jitter_smoke | 4 | rt_core |
 | C++ MuJoCo | `test/test_mujoco_backend.cpp` | 1 (2,000주기 + 비용 p99 < 900 us) | mujoco |
-| Python 단위(가짜 브로커·DB) | `fleet/tests/test_fleet_logic.py` · `test_ota_rollout.py` · `test_ota_artifact.py` · `test_collector_resilience.py` | 6 + 3 + 9 + 7(main 스모크·꺼진 장치 last_seen 포함) = 25 | rt_core |
+| Python 단위(가짜 브로커·DB) | `fleet/tests/test_fleet_logic.py` · `test_ota_rollout.py` · `test_ota_artifact.py` · `test_collector_resilience.py` | 6 + 3 + 10(상대 경로 슬롯 포함) + 7(main 스모크·꺼진 장치 last_seen 포함) = 26 | rt_core |
 | 통합(진짜 컨테이너) | `fleet/tests/integration.sh` + `fleet/chaos/assert_results.py` | 장애 3종 + 나쁜 펌웨어 롤백 + 정상 OTA 판정 | fleet_integration |
 | 연기(smoke) | `jitter_bench --no-rt 2초`, 대시보드 JSON | 2 | rt_core |
 

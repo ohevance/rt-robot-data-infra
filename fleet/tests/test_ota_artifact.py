@@ -97,6 +97,22 @@ def serve(directory):
     return server, f"http://127.0.0.1:{server.server_address[1]}"
 
 
+# ---------- 0: 상대 경로 슬롯 (11/10 CI 에서 발견) ----------
+def test_relative_slot_root(base_url, good, work):
+    """슬롯 디렉터리를 상대 경로로 줘도 자가 점검이 돈다.
+    통합 테스트(integration.sh)와 릴리스 카나리는 --slot-root build/…/devices 처럼 상대 경로를 준다. 자가 점검은 슬롯 안에서
+    (cwd=슬롯) 돌리는데, 스크립트 경로까지 상대 경로면 "슬롯 안에서 본 슬롯 경로"가 되어 못 찾는다(exit 127).
+    단위 테스트는 임시 디렉터리(절대 경로)만 써서 이걸 못 잡았다."""
+    saved = os.getcwd()
+    os.chdir(work)
+    try:
+        r = ota_apply.install(os.path.join("rel", "dev-1"), good["version"], base_url + "/" + good["url"], good["sha256"], good["size"])
+        check(r.ok and r.stage == "switched", f"상대 경로 슬롯에서도 설치된다: ok={r.ok} stage={r.stage} err={r.error}")
+        check(ota_apply.current_version(os.path.join("rel", "dev-1")) == good["version"], "상대 경로로 읽어도 current 가 새 버전")
+    finally:
+        os.chdir(saved)
+
+
 # ---------- 1~4: ota_apply 단독 ----------
 def test_apply_unit(base_url, good, bad, work):
     slot_root = os.path.join(work, "unit-slots")
@@ -250,6 +266,7 @@ if __name__ == "__main__":
     BROKER.reset()
     agents = []
     try:
+        test_relative_slot_root(base_url, good, work)
         test_apply_unit(base_url, good, bad, work)
         agents = start_fleet(work, 20)
         time.sleep(0.2)

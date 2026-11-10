@@ -135,6 +135,7 @@ def extract(tar_path, dest_dir):
 
 def selftest(slot_dir, timeout_s=SELFTEST_TIMEOUT_S):
     """slot_dir/selftest.sh 를 돌린다. 없으면 통과로 본다(점검이 없는 산출물). 0 이 아니면 ValueError"""
+    slot_dir = os.path.abspath(slot_dir)
     script = os.path.join(slot_dir, "selftest.sh")
     if not os.path.isfile(script):
         return "no selftest"
@@ -150,6 +151,7 @@ def selftest(slot_dir, timeout_s=SELFTEST_TIMEOUT_S):
 
 def post_switch(slot_dir, timeout_s=SELFTEST_TIMEOUT_S):
     """slot_dir/post_switch.sh 가 있으면 돌린다. 없으면 아무것도 안 한다. 0 이 아니면 ValueError"""
+    slot_dir = os.path.abspath(slot_dir)
     script = os.path.join(slot_dir, "post_switch.sh")
     if not os.path.isfile(script):
         return "no hook"
@@ -195,6 +197,8 @@ def install(slot_root, version, url, sha256, size=None, keep_download=False):
     slot_root/ 구조:  slots/<version>/...  current -> slots/<version>  state.json  .download/
     """
     r = Result()
+    # 절대 경로로 굳힌다 — 자가 점검·훅은 슬롯 안에서(cwd=슬롯) 돌리므로 상대 경로면 스크립트를 못 찾는다 (11/10 CI: exit 127)
+    slot_root = os.path.abspath(slot_root)
     os.makedirs(os.path.join(slot_root, "slots"), exist_ok=True)
     tar_path = os.path.join(slot_root, ".download", f"{version}.tar.gz")
     slot_dir = os.path.join(slot_root, "slots", version)
