@@ -19,12 +19,19 @@ def sql_target(sql, fmt="time_series"):
     return {"datasource": DS, "rawSql": sql, "format": fmt, "rawQuery": True, "refId": "A"}
 
 
-def stat_panel(pid, title, sql, x, y, w, h, unit="none"):
+GREEN_ONLY = [{"color": "green", "value": None}]
+
+
+def stat_panel(pid, title, sql, x, y, w, h, unit="none", steps=None):
+    """steps: 색 기준. 주지 않으면 초록만.
+    11/10: 기준을 안 주면 Grafana 기본값(80 이상 빨강)이 걸린다 → 장치 300대도, 시드니 서버의 지연 150 ms 도 빨갛게 보였다"""
+    if steps is None:
+        steps = GREEN_ONLY
     return {
         "id": pid, "type": "stat", "title": title, "datasource": DS,
         "gridPos": {"x": x, "y": y, "w": w, "h": h},
         "targets": [sql_target(sql, "table")],
-        "fieldConfig": {"defaults": {"unit": unit}, "overrides": []},
+        "fieldConfig": {"defaults": {"unit": unit, "thresholds": {"mode": "absolute", "steps": steps}}, "overrides": []},
         "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "none"},
     }
 
@@ -59,17 +66,19 @@ def build():
                    4, 0, 4, 4),
         stat_panel(3, "전달 지연 p95 (ms, 장치→수집기)",
                    "SELECT lat_p95_ms FROM collector_stats ORDER BY time DESC LIMIT 1",
-                   8, 0, 4, 4, unit="ms"),
+                   8, 0, 4, 4, unit="ms",
+                   # 같은 PC 는 수 ms, 다른 대륙의 서버는 150~200 ms(시계 차이 포함) 가 정상 → 0.5초부터 노랑, 1초부터 빨강
+                   steps=[{"color": "green", "value": None}, {"color": "yellow", "value": 500}, {"color": "red", "value": 1000}]),
         stat_panel(4, "DB 적재 시간 (ms, 최근 1초)",
                    "SELECT insert_ms FROM collector_stats ORDER BY time DESC LIMIT 1",
                    12, 0, 4, 4, unit="ms"),
         stat_panel(5, "오프라인 이벤트 (최근 10분, 브로커 종료 유언 포함)",
                    "SELECT count(*) AS offline FROM events WHERE kind = 'offline' AND time > now() - interval '10 minutes'",
-                   16, 0, 4, 4),
+                   16, 0, 4, 4, steps=[{"color": "green", "value": None}, {"color": "yellow", "value": 1}]),
         stat_panel(6, "멈춤·고장 장치 (tripped/fault/updating)",
                    "SELECT count(*) AS bad FROM devices WHERE state IN ('tripped', 'fault', 'updating', 'recovering') "
                    "AND last_seen > now() - interval '5 seconds'",
-                   20, 0, 4, 4),
+                   20, 0, 4, 4, steps=[{"color": "green", "value": None}, {"color": "red", "value": 1}]),
         ts_panel(7, "초당 메시지 / 온라인 장치",
                  "SELECT time, msgs_per_s AS \"msgs/s\", online FROM collector_stats WHERE $__timeFilter(time) ORDER BY time",
                  0, 4, 12, 8),

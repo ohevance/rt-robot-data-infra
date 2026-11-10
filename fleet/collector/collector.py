@@ -105,8 +105,8 @@ class Batch:
     def __init__(self, rows, statuses, devices_snapshot, snapshot_time):
         self.rows = rows                        # 텔레메트리 행
         self.statuses = statuses                # (device_id, "online"/"offline", 시각)
-        self.devices_snapshot = devices_snapshot  # (device_id, fw, state)
-        self.snapshot_time = snapshot_time      # devices.last_seen 에 쓸 시각
+        self.devices_snapshot = devices_snapshot  # (device_id, fw, state, 그 장치의 마지막 메시지 도착 시각)
+        self.snapshot_time = snapshot_time      # 묶음을 만든 시각 (기록용)
 
 
 class Collector:
@@ -119,7 +119,8 @@ class Collector:
         self.pending_rows = []        # 아직 묶지 않은 텔레메트리 행
         self.pending_latency = []     # 그 행들의 전달 지연(ms)
         self.pending_status = []      # (device_id, "online"/"offline", 시각)
-        self.last_seen = {}           # device_id -> 마지막 메시지 시각 (monotonic)
+        self.last_seen = {}           # device_id -> 마지막 메시지 시각 (monotonic — 온라인 수 계산용)
+        self.last_seen_wall = {}      # device_id -> 마지막 메시지 도착 시각 (UTC — devices.last_seen 에 쓴다)
         self.fw_of = {}               # device_id -> fw_version
         self.state_of = {}            # device_id -> state
         self.dropped_bad = 0
@@ -175,6 +176,7 @@ class Collector:
             self.pending_rows.append(row)
             self.pending_latency.append(latency_ms)
             self.last_seen[device_id] = time.monotonic()
+            self.last_seen_wall[device_id] = datetime.now(timezone.utc)
             self.fw_of[device_id] = row[9]
             self.state_of[device_id] = row[10]
 
@@ -192,9 +194,13 @@ class Collector:
             now_mono = time.monotonic()
             devices_snapshot = []
             for device_id in self.last_seen:
+                # 최근 5초 안에 메시지를 보낸 장치만 온라인으로 세고, devices 표도 그 장치만 갱신한다.
+                # 11/10 수정: 전에는 "한 번이라도 본 장치 전부"를 매초 지금 시각으로 갱신했다 → 꺼진 장치의 last_seen 이
+                #   계속 새로워져 대시보드의 "온라인 장치"·"장치 목록 age_s" 가 틀렸다 (EC2 첫 운영에서 발견: 실제 1대, 표시 4대)
                 if now_mono - self.last_seen[device_id] < 5.0:
                     online += 1
-                devices_snapshot.append((device_id, self.fw_of.get(device_id), self.state_of.get(device_id)))
+                    devices_snapshot.append((device_id, self.fw_of.get(device_id), self.state_of.get(device_id),
+                                             self.last_seen_wall[device_id]))
         batch = Batch(rows, statuses, devices_snapshot, datetime.now(timezone.utc))
         return batch, latencies, online
 
@@ -286,13 +292,13 @@ class Collector:
                     for row in batch.rows:
                         copy.write_row(row)
             # 2) devices: 마지막으로 본 시각·버전·상태 갱신 (없으면 새로 만든다)
-            for device_id, fw, state in batch.devices_snapshot:
+            for device_id, fw, state, seen_at in batch.devices_snapshot:
                 cur.execute(
                     "INSERT INTO devices (device_id, first_seen, last_seen, fw_version, state) "
                     "VALUES (%s, %s, %s, %s, %s) "
                     "ON CONFLICT (device_id) DO UPDATE SET last_seen = EXCLUDED.last_seen, "
                     "fw_version = EXCLUDED.fw_version, state = EXCLUDED.state",
-                    (device_id, batch.snapshot_time, batch.snapshot_time, fw, state))
+                    (device_id, seen_at, seen_at, fw, state))
             # 3) 온라인/오프라인 이벤트
             for device_id, status, when in batch.statuses:
                 cur.execute("INSERT INTO events (time, device_id, kind, detail) VALUES (%s, %s, %s, %s)",

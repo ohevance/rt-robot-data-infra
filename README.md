@@ -11,7 +11,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | ① 실시간 Linux 미들웨어, ROS 2/DDS | `rt_control/rt_core` RT 루프 + 측정기 + 제어 단계 + 상태 머신, `rt_control/ros2_adapter` ROS 2 노드, `dds_bench` | 표① 지연·지터 (p99.9/max) · 표② DDS 손실·지연 · 노드 `rt_status`(wake/work us, state) | 작성 완료, WSL 실행 확인(노드·DDS). **Pi 4 실측 완료(11/04~05)**: 일반 → PREEMPT_RT → 고정 → 격리, `table1_pi4.md` |
 | ② 실시간 로깅·모니터링·시각화·업데이트 | `fleet` 수집 → TimescaleDB → Grafana(14 패널), OTA 단계 배포·헬스 게이트·자동 롤백, 장애 주입 4종, **릴리스 → 배포 파이프라인**(태그 → 빌드 → 패키지 → 가상 50대 카나리 → Release 게시 → 장치가 내려받아 sha256·A/B 슬롯·자가 점검으로 설치, 실물은 자율 업데이트) `docs/RELEASE.md` | 표③-1 처리량·전달 지연 · 표③-2 장애 감지·복구·유실 · 표③-3 OTA 롤백 시간 · E22 50대 설치 시간 | 완료 — WSL 실측(11/04 표③-2·③-3), CI 러너에서도 매 push 재실행; 릴리스 파이프라인 11/10 |
 | ③ 센서 스트리밍·로깅·전처리 자동화 | `fleet` 장치 에이전트(가상 50 + RT 노드 1), store-and-forward, 수집기 backlog, QoS 0/1 · **`data_pipeline`** 로봇 안 100 Hz 기록(rosbag2 MCAP) → CSV → 검증 요약 | 초당 메시지, 전달 지연 p95, 유실 % · 기록 실제 Hz·틈·추종 오차 | 작성 완료, WSL 실행 확인(기록 11/05) |
-| ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100 6 자유도 · **위로보틱스 공개 ALLEX 48 자유도**, 프로필만 다름), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스 ×2 모델) | CI 배지, 테스트 수(C++ 5 · Python 15 · 통합 1), 물리 한 주기 비용 p99(6 · 48 자유도) | 완료, CI 초록(ALLEX 단계 포함) — ALLEX 1 kHz p99 622(WSL) · 458(러너) us → **프로필 500 Hz**(실측 p99 1,000 = 2 ms 의 50 %), E21 |
+| ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100 6 자유도 · **위로보틱스 공개 ALLEX 48 자유도**, 프로필만 다름), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스 ×2 모델) | CI 배지, 테스트 수(C++ 5 · Python 25 · 통합 1), 물리 한 주기 비용 p99(6 · 48 자유도) | 완료, CI 초록(ALLEX 단계 포함) — ALLEX 1 kHz p99 622(WSL) · 458(러너) us → **프로필 500 Hz**(실측 p99 1,000 = 2 ms 의 50 %), E21 |
 
 ## 숫자 한눈에 (2026-11-06 기준 — 어디서 잰 값인지가 숫자만큼 중요하다)
 

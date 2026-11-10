@@ -9,6 +9,7 @@
   5) --qos 1 이면 지속 세션(clean_session=False)으로 붙고 telemetry 를 QoS 1 로 구독한다
   6) 옛 스키마(003 미적용)면 check_schema 가 False 를 돌려준다 (안내 후 종료용)
   7) 종료(SIGTERM/Ctrl+C) 때 아직 묶지 않은 pending 행을 마지막으로 적재한다 (11/04 실측에서 잃었던 "마지막 1초")
+  9) 꺼진 장치의 devices.last_seen 은 새로워지지 않는다 (11/10 EC2 첫 운영: 실제 1대인데 대시보드가 4대로 셌다)
   8) main() 한 바퀴 스모크: 인자 → 잠금 → 시그널 핸들러 등록 → 루프 → shutdown 까지 실제 진입점이 깨지지 않았는가
      (11/05 CI 에서 request_stop 누락 NameError 가 통합 테스트에서만 드러났다 — 진입점은 단위 테스트가 한 번은 타야 한다)
 
@@ -141,6 +142,27 @@ def test_old_schema_detected():
     check(c.check_schema() is False, "003 미적용 스키마면 False (migrate.py 안내)")
 
 
+def test_stale_device_last_seen_not_refreshed():
+    """장치 old 는 한 번 보내고 조용해지고, 장치 live 는 계속 보낸다. 5초가 지난 뒤(시계를 직접 민다) flush 하면
+    devices 표에서 live 의 last_seen 만 새로워지고 old 의 것은 처음 값 그대로여야 한다."""
+    BROKER.reset()
+    fake_psycopg.reset()
+    c = Collector("localhost", 1883, "postgresql://fake", dry_run=False)
+    publish_telemetry("old", 0)
+    publish_telemetry("live", 0)
+    s = c.flush_once()
+    check(s["online"] == 2, f"처음엔 둘 다 온라인 (got {s['online']})")
+    old_first = fake_psycopg.STORE["devices"]["old"][2]
+    live_first = fake_psycopg.STORE["devices"]["live"][2]
+    c.last_seen["old"] -= 6.0                      # old 가 6초 전에 마지막으로 보냈다고 치고
+    time.sleep(0.01)
+    publish_telemetry("live", 1)
+    s = c.flush_once()
+    check(s["online"] == 1, f"6초 조용한 장치는 온라인 수에서 빠진다 (got {s['online']})")
+    check(fake_psycopg.STORE["devices"]["old"][2] == old_first, "꺼진 장치의 last_seen 은 그대로다")
+    check(fake_psycopg.STORE["devices"]["live"][2] > live_first, "살아 있는 장치의 last_seen 은 새로워진다")
+
+
 def test_main_entry_smoke():
     """main() 을 끝까지 한 번 통과시킨다. STOP 플래그를 미리 세워 두면 while 이 바로 끝나 shutdown 까지 간다.
     시그널 핸들러도 직접 불러 본다(request_stop 이 없으면 여기서 NameError)."""
@@ -166,6 +188,7 @@ if __name__ == "__main__":
     test_persistent_session_option()
     test_shutdown_flushes_pending()
     test_old_schema_detected()
+    test_stale_device_last_seen_not_refreshed()
     test_main_entry_smoke()
     if fail_count == 0:
         print("OK: collector resilience")

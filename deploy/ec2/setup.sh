@@ -83,13 +83,20 @@ $DOCKER compose -f fleet/docker-compose.yml -f fleet/docker-compose.prod.yml up 
 sudo systemctl enable docker > /dev/null 2>&1 || true
 
 echo "--- 8) DB 보존 정책 (${RETENTION_DAYS}일) — 디스크 20 GB 가 차지 않게"
-for i in $(seq 1 60); do
-  if $DOCKER exec fleet_db pg_isready -U fleet -d fleet > /dev/null 2>&1; then break; fi
+# "DB 가 응답한다"가 아니라 "확장과 표 셋이 생겼다"를 기다린다.
+# 11/10 첫 실행: DB 컨테이너는 처음 켜질 때 초기화용 임시 서버를 먼저 띄운다. pg_isready 는 그 임시 서버에도 "준비됨"이라
+#   답해서, init.sql(확장·표 생성)이 끝나기 전에 보존 정책을 걸다 "function add_retention_policy does not exist" 로 실패했다.
+READY_SQL="SELECT (SELECT count(*) FROM pg_extension WHERE extname = 'timescaledb') + (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('telemetry', 'events', 'collector_stats'))"
+DB_READY=0
+for i in $(seq 1 90); do
+  n="$($DOCKER exec fleet_db psql -U fleet -d fleet -tAc "$READY_SQL" 2> /dev/null || true)"
+  if [ "$n" = "4" ]; then DB_READY=1; break; fi
   sleep 2
 done
+if [ "$DB_READY" != "1" ]; then echo "    DB 초기화가 3분 안에 끝나지 않았습니다 — 잠시 뒤 이 스크립트를 다시 실행하세요 (다시 돌려도 안전)"; fi
 for table in telemetry events collector_stats; do
   $DOCKER exec fleet_db psql -U fleet -d fleet -q -c \
-    "SELECT add_retention_policy('$table', INTERVAL '${RETENTION_DAYS} days', if_not_exists => TRUE);" > /dev/null || echo "    (보존 정책 $table 실패 — 표가 아직 없으면 수집기가 마이그레이션한 뒤 다시 실행)"
+    "SELECT add_retention_policy('$table', INTERVAL '${RETENTION_DAYS} days', if_not_exists => TRUE);" > /dev/null && echo "    $table: ${RETENTION_DAYS}일" || echo "    (보존 정책 $table 실패 — 이 스크립트를 다시 실행하세요)"
 done
 
 echo "--- 9) 접속 정보"
