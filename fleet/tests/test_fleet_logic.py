@@ -8,12 +8,17 @@
   4) Collector.flush_once(dry-run): 메시지 수·온라인 수·지연 통계가 맞게 나온다
   5) 유언(LWT): 에이전트가 갑자기 죽으면 브로커가 offline 을 발행하고 수집기가 그것을 이벤트로 받는다
   6) 보관(retained) 상태는 이벤트가 아니다 · 수집기 단일 인스턴스 잠금
+  8) pi_agent 는 SIGTERM(systemd stop·재부팅) 에 "정상 종료" 길로 끝난다 — offline 을 스스로 남긴다 (별도 프로세스로 확인)
+  7) 왕복 시간 도구(fleet/tools/mqtt_rtt.py): 보낸 것이 전부 되돌아오고 번호로 짝이 맞는다, 통계가 맞다, 수집기가 구독하는 토픽을 건드리지 않는다
 
 실행:  python3 fleet/tests/test_fleet_logic.py
 """
 import json
 import os
+import signal
+import subprocess
 import sys
+import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,8 +30,10 @@ BROKER = fake_mqtt.BROKER
 
 sys.path.insert(0, os.path.join(HERE, "..", "agent"))
 sys.path.insert(0, os.path.join(HERE, "..", "collector"))
+sys.path.insert(0, os.path.join(HERE, "..", "tools"))
 from device_agent import DeviceAgent  # noqa: E402
 from collector import Collector, parse_telemetry, acquire_single_instance_lock  # noqa: E402
+import mqtt_rtt  # noqa: E402
 
 fail_count = 0
 
@@ -195,6 +202,50 @@ def test_retained_status_and_lock():
     first.close()
 
 
+def test_mqtt_rtt_probe():
+    BROKER.reset()
+    c = Collector("localhost", 1883, "postgresql://x", dry_run=True)   # 수집기가 같이 붙어 있는 상황
+    probe = mqtt_rtt.RttProbe("localhost", 1883, qos=0)
+    probe.start(timeout_s=2.0)
+    check(probe.topic.startswith("rtt/") and not probe.topic.startswith("fleet/"), f"왕복 토픽은 fleet/ 아래가 아니다: {probe.topic}")
+    check(probe.wait_ready(timeout_s=2.0) is True, "탐침이 되돌아와 구독이 확인된다")
+    probe.run(count=20, interval_s=0.0, payload_bytes=200, settle_s=0.5)
+    values = probe.results(20)
+    probe.stop()
+    check(len(values) == 20 and all(v >= 0.0 for v in values), f"20개를 보내 20개가 되돌아왔다 (got {len(values)})")
+    check(-1 in probe.rtt_ms and len(probe.rtt_ms) == 21, f"탐침(음수 번호)은 따로 적히고 결과 20개에 섞이지 않는다 (기록 {len(probe.rtt_ms)}개)")
+    check(len(c.pending_rows) == 0 and c.dropped_bad == 0, "수집기는 왕복 메시지를 받지 않는다 (텔레메트리가 아니다)")
+    stats = mqtt_rtt.summarize([5.0, 1.0, 3.0, 2.0, 4.0], 6)
+    check(stats["sent"] == 6 and stats["received"] == 5 and stats["lost"] == 1, f"보낸 수·받은 수·잃은 수: {stats}")
+    check(stats["min"] == 1.0 and stats["p50"] == 3.0 and stats["max"] == 5.0 and stats["mean"] == 3.0, f"최소·중앙값·최대·평균: {stats}")
+    empty = mqtt_rtt.summarize([], 3)
+    check(empty["received"] == 0 and empty["lost"] == 3 and empty["p50"] is None, "하나도 못 받으면 숫자는 None")
+    values_100 = sorted(float(i) for i in range(1, 101))
+    check(mqtt_rtt.percentile(values_100, 95) == 95.0 and mqtt_rtt.percentile(values_100, 99) == 99.0, "백분위수는 가장 가까운 순위")
+
+
+def test_pi_agent_sigterm():
+    """pi_agent 를 별도 프로세스로 띄우고(가짜 브로커) SIGTERM 을 보낸다 — systemd 가 서비스를 멈출 때와 같다.
+    기대: 종료 코드 0, "정상 종료" 줄이 찍힌다(= finally 의 agent.stop() 이 돌았다). 핸들러가 없으면 종료 코드가 -15 다."""
+    agent_dir = os.path.join(HERE, "..", "agent")
+    slot_dir = tempfile.mkdtemp(prefix="pi-agent-test-")
+    code = ("import sys; sys.path.insert(0, %r); import fake_mqtt; fake_mqtt.install(); sys.path.insert(0, %r); import pi_agent; "
+            "sys.argv = ['pi_agent.py', '--device-id', 't-pi', '--slot-root', %r, '--rate', '20']; sys.exit(pi_agent.main())"
+            % (HERE, agent_dir, slot_dir))
+    proc = subprocess.Popen([sys.executable, "-u", "-c", code], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    first = proc.stdout.readline()                 # 시작 줄이 찍힐 때까지 기다린다 (핸들러는 그 전에 걸린다)
+    check("pi agent: t-pi" in first, f"시작 줄: {first.strip()[:80]}")
+    time.sleep(0.3)                                # 몇 번 보내게 둔다
+    proc.send_signal(signal.SIGTERM)
+    try:
+        rest, _ = proc.communicate(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        rest = "(10초 안에 안 끝남)"
+    check(proc.returncode == 0, f"SIGTERM 뒤 종료 코드 0 (got {proc.returncode})")
+    check("정상 종료" in rest, f"정상 종료 줄이 찍힌다: {rest.strip()[-80:]}")
+
+
 if __name__ == "__main__":
     test_parse()
     test_store_and_forward()
@@ -202,6 +253,8 @@ if __name__ == "__main__":
     test_collector_dry_run()
     test_lwt_reaches_collector()
     test_retained_status_and_lock()
+    test_mqtt_rtt_probe()
+    test_pi_agent_sigterm()
     if fail_count == 0:
         print("OK: fleet logic")
         sys.exit(0)

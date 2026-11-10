@@ -22,6 +22,7 @@
 | `ota/rollout.py` | OTA 단계 배포 + 헬스 게이트 + 자동 롤백, 롤백 시간 측정 |
 | `chaos/inject.py` · `chaos/assert_results.py` | 장애 주입 4종(broker·db·collector·bad_firmware) → JSON · 기대대로 복구됐는지 판정 |
 | `tools/diag.py` | DB 진단: 오프라인 이벤트 분류, 전달 지연 튐 주기 |
+| `tools/mqtt_rtt.py` | MQTT 왕복 시간: 보내고 브로커를 거쳐 자기가 받는다 — 시계 하나로 잰다(대시보드의 전달 지연은 두 시계의 차이가 섞인다). 결과에 서버 주소를 적지 않는다 |
 | `grafana/` | 데이터 소스·대시보드 자동 등록 (`make_dashboard.py` 가 JSON 생성) |
 | `tests/` | 브로커·DB 없이 도는 단위 테스트 3개(가짜 브로커 `fake_mqtt.py`·가짜 DB `fake_psycopg.py`) + 진짜 컨테이너로 도는 `integration.sh` |
 

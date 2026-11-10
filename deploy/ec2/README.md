@@ -83,7 +83,17 @@ bash deploy/pi/install.sh                  # paho-mqtt 2.x 가 없으면 받아 
 journalctl --user -u rt-pi-agent -n 20 --no-pager
 ```
 - `git pull` 이 "untracked working tree files would be overwritten" 으로 멈추면: Pi 에서 잰 측정 파일이 Pi 에 그대로 남아 있고 같은 파일이 WSL 을 거쳐 저장소에 올라간 것이다. 지우지 말고 옮긴 뒤 다시 받는다 — `mkdir -p ~/pi-measure-backup && git ls-files --others --exclude-standard docs/measurements | xargs -I{} mv {} ~/pi-measure-backup/ && git pull`.
-- **Pi 의 자동 보안 업데이트(unattended-upgrade)**: 오래 꺼 두었다 켜면 수십 개 패키지를 30분 넘게 올리고 그동안 `apt` 가 잠긴다(끊지 않는다 — 기다리거나 apt 가 필요 없는 길로 간다). 목록에 일반 커널(`linux-image-raspi`)이 들어 있을 수 있다. **재부팅 전에** 다음 부팅 커널이 RT 인지 본다: `linux-version list | linux-version sort | tail -n 1` 과 `ls -l /boot/vmlinuz` 가 `…-raspi-realtime` 을 가리켜야 한다. 재부팅 뒤 `uname -r`.
+- **Pi 의 자동 보안 업데이트(unattended-upgrade)**: 오래 꺼 두었다 켜면 수십 개 패키지를 30분 넘게 올리고 그동안 `apt` 가 잠긴다(끊지 않는다 — 기다리거나 apt 가 필요 없는 길로 간다). 목록에 일반 커널(`linux-image-raspi`)이 들어 있을 수 있다. **재부팅 전에** 다음 부팅 커널이 RT 인지 본다 — Pi 가 부팅 때 읽는 것은 `/boot/firmware/` 의 `vmlinuz`·`initrd.img` 이므로 그 둘이 RT 커널의 파일과 같은지 해시로 비교한다:
+  ```bash
+  sudo -v                                    # 비밀번호를 먼저 (여러 줄을 붙여 넣을 때 입력을 건너뛰지 않게)
+  K=$(uname -r)                              # 지금 도는 커널 (…-raspi-realtime 이어야 한다)
+  for f in vmlinuz initrd.img; do
+    a=$(sudo sha256sum /boot/$f-$K | cut -c1-16); b=$(sudo sha256sum /boot/firmware/$f | cut -c1-16)
+    [ "$a" = "$b" ] && echo "$f 일치 → 다음 부팅도 $K" || echo "$f 불일치 (boot=$a firmware=$b) — 재부팅하지 말 것"
+  done
+  loginctl show-user "$USER" -p Linger       # Linger=yes 여야 재부팅 뒤 로그인 없이 에이전트가 뜬다
+  ```
+  **`ls -l /boot/vmlinuz` 로 판단하지 않는다**(11/11 에 고친 안내): 그 링크는 "마지막에 설치된 커널 패키지"를 가리킬 뿐이다. 11/10 의 자동 업데이트 뒤 링크는 일반 커널(`6.8.0-1065-raspi`)을 가리켰지만 `/boot/firmware` 의 파일은 RT 커널(`6.8.0-2054-raspi-realtime`)과 해시가 같았다. 커널을 부팅 영역에 복사하는 도구(flash-kernel)가 설치된 것 중 **버전이 가장 높은 것**을 고르기 때문이다(업데이트 로그: `A higher version (6.8.0-2054-raspi-realtime) is still installed, no reflashing required`). 반대로 말하면 일반 커널의 번호가 RT 보다 높아지는 날에는 일반 커널로 뜬다 — 그래서 재부팅 전에 해시를 본다.
 ```bash
 # [WSL 창] 같은 브로커로 가상 장치·배포기를 붙여 보기 (시연)
 export FLEET_BROKER=<퍼블릭 DNS> FLEET_TLS_CA=~/fleet-ca.crt FLEET_USER=fleet FLEET_PASS=<비밀번호>
@@ -97,7 +107,20 @@ python3 fleet/ota/rollout.py --manifest https://github.com/<owner>/<repo>/releas
 ## 4b. 서버가 시드니에 있다는 것 — 숫자를 읽을 때
 - 한국(Pi·WSL) ↔ 시드니는 왕복 지연이 서울 리전보다 크다(대략 130~160 ms 로 **예상**, 재기 전의 추정). 그래서 **서버 왕복이 들어가는 숫자**(텔레메트리 전달 지연, 장애 감지·복구 시간, 단계 배포의 적용·롤백 시간, 재접속 시간)를 이 서버로 잰 것에는 반드시 **"서버: 시드니"** 라고 적는다. WSL·러너에서 잰 기존 표③ 숫자와 섞어 비교하지 않는다.
 - 지연과 무관한 것: 유실 0 여부, Pi 의 RT 지터(보드 안에서 잰다), 자율 업데이트(GitHub 에서 받는다).
-- 왕복 지연 자체도 재서 적는다: `ping`/TCP 연결 시간, 그리고 수집기의 전달 지연(`recv − 장치 ts`).
+- 왕복 지연은 **MQTT 왕복**으로 잰다 — `fleet/tools/mqtt_rtt.py`: 한 클라이언트가 보내고 브로커를 거쳐 자기가 다시 받는 시간을 시계 하나로 잰다(TLS·비밀번호·브로커를 장치와 같은 길로 지난다. `ping` 은 보안 그룹이 막고 브로커를 지나지 않는다).
+  ```bash
+  # [Pi 창] 서비스와 같은 설정으로. 에이전트는 그대로 돈다 (client id 가 달라 서로 건드리지 않는다)
+  set -a; . ~/.config/rt-fleet/fleet.env; set +a
+  python3 fleet/tools/mqtt_rtt.py --count 300 --from-label "Pi 4 (집, Wi-Fi)" --out ~/rtt_pi_sydney.json     # 1분. 결과 파일에 서버 주소는 없다
+  ```
+- 밤샘·며칠 기록은 **세어서** 본다 — `deploy/ec2/soak_report.sh`(서버 안에서): 장치의 일련번호로 보냈어야 할 수·받은 수·빠진 수, 에이전트 재시작 횟수와 그때의 공백, 가장 긴 간격을 JSON 으로 낸다. 그래프는 "끊긴 것처럼 안 보인다"까지만 말해 준다.
+  ```bash
+  # [EC2 안]
+  cd ~/rt-robot-data-infra && git pull && bash deploy/ec2/soak_report.sh pi-rt          # → ~/soak_pi-rt_<UTC시각>.json
+  # [WSL 창] 저장소로 가져오기 (비밀값 없음)
+  scp -i ~/rt-fleet.pem "ubuntu@$H:~/soak_pi-rt_*.json" docs/measurements/
+  ```
+  첫 밤(11/10 18:37 ~ 11/11 08:43, 14.09 시간): **50,730건 중 유실 0**, 중복 0, 재시작 0, 가장 긴 간격 1.00초, offline 이벤트 0 — 그 사이 수집기 재시작 1회 포함(`docs/measurements/soak_pi_sydney_20261111_0843.json`).
 - **전달 지연(`transit`)에는 두 시계의 차이가 섞여 있다.** 장치가 찍은 시각과 서버가 받은 시각을 빼기 때문이다. 11/10 첫 관찰: WSL 의 가상 장치 3대 p50 184 / p95 200 ms, Pi p95 151 ms 안팎 — 같은 서버인데 보내는 쪽에 따라 30~50 ms 다르다는 것 자체가 시계 차이가 섞였다는 표시다. 이 값은 "지연"으로 인용하지 않는다. 시계와 무관한 왕복 시간(TCP 연결·MQTT 핑)을 따로 재서 그 절반과 비교한다(다음 측정).
 
 ## 5. 비용과 끄는 법

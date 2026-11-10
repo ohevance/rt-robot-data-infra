@@ -77,7 +77,7 @@ rt-robot-data-infra-1.2.0-aarch64/
 | 6 훅 | `post_switch.sh` 있으면 실행 | **스스로 이전 슬롯으로 복귀** (`post_switch_failed_rolled_back`) |
 
 - 실패는 텔레메트리에 실린다: `state=fault`, `ota_stage=extracted|downloaded|…`, `ota_error="…selftest 실패 (exit 1)…"`. 배포기는 이걸 보고 **헬스 대기 전에** 롤백을 결정한다(`Rollout.wait_apply`).
-- 롤백(`ota_rollback` 명령 또는 자율): `current` → `previous`. 내려받을 것이 없어 0.2초 안이다. 설치가 전환 전에 실패한 장치는 되돌릴 것이 없으므로 상태만 `ok` 로.
+- 롤백(`ota_rollback` 명령 또는 자율): `current` → `previous`. 내려받을 것이 없어 0.2초 안이다. 설치가 전환 전에 실패한 장치는 되돌릴 것이 없으므로 상태만 `ok` 로. 장치는 `ota_rollback` 을 받으면 **"직전 설치가 실패했는가"를 먼저** 본다 — 11/11 까지는 "이전 슬롯이 있는가"를 먼저 봐서, 두 번째 릴리스 뒤에 깨진 패키지가 오면 그것을 거부한 장치가 멀쩡한 현재 버전에서 한 단계 더 옛 버전으로 내려갔다(슬롯이 비어 있던 시험·카나리에서는 드러나지 않았다. DECISIONS 11/11).
 - 전원이 설치 도중 꺼지면: 1~4 단계면 `current` 는 옛 슬롯 그대로(쓰레기 `.download`·반쯤 풀린 슬롯은 다음 설치가 지운다), 5 단계의 `os.replace` 는 파일시스템이 원자성을 보장한다. 6 단계 도중이면 재부팅 뒤 `current` 는 새 슬롯이고 훅은 다시 돌지 않는다 — 이건 한계다(6절).
 
 ## 4. 배포의 세 가지 운전 모드 — 같은 설치 코드, 시작 버튼만 다르다

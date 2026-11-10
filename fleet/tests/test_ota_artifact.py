@@ -211,6 +211,36 @@ def test_fleet_bad(agents, manifest_bad_path, good_version):
     check(all(ota_apply.current_version(a.slot_root) == good_version for a in agents), "current 슬롯은 전부 이전 정상 버전")
 
 
+# ---------- 6b: 두 번째 릴리스 뒤에 온 깨진 패키지 (11/11) ----------
+def test_rollback_after_rejected_install(base_url, good, bad, work):
+    """장치에 정상 버전이 둘(이전 1.1.0, 현재 1.2.0) 깔린 뒤 깨진 패키지가 온다 → 자가 점검이 거부 → 배포기가 ota_rollback 을 보낸다.
+    기대: 현재 버전(1.2.0) 그대로. 거부한 패키지는 current 를 건드린 적이 없으므로 되돌릴 슬롯이 없다.
+    고치기 전: previous 슬롯이 있다는 이유로 1.1.0 으로 한 단계 더 내려갔다 (슬롯이 비어 있던 기존 시험에서는 안 보였다)."""
+    slot_root = os.path.join(work, "rb-slots")
+    agent = DeviceAgent("rb-1", "localhost", 1883, 0.05, metrics_fixed, fw_version="1.0.0", slot_root=slot_root)
+    agent.start()
+    try:
+        agent.apply_ota_artifact(good["version"], base_url + "/" + good["url"], good["sha256"], good["size"])
+        agent.apply_ota_artifact("1.2.0", base_url + "/" + good["url"], good["sha256"], good["size"])
+        st = ota_apply.read_state(slot_root)
+        check(agent.fw_version == "1.2.0" and st["current"] == "1.2.0" and st["previous"] == good["version"],
+              f"준비: 현재 1.2.0, 이전 {good['version']} (got fw={agent.fw_version} state={st})")
+        agent.apply_ota_artifact(bad["version"], base_url + "/" + bad["url"], bad["sha256"], bad["size"])
+        check(agent.state == "fault" and agent.ota_error is not None and "selftest" in agent.ota_error, f"깨진 패키지는 거부되고 fault 로 알린다: {agent.state} {agent.ota_error}")
+        check(ota_apply.current_version(slot_root) == "1.2.0", "거부 직후에도 current 는 1.2.0")
+        BROKER.publish(agent.topic_cmd, json.dumps({"cmd": "ota_rollback"}).encode("utf-8"), 1, False)
+        st = ota_apply.read_state(slot_root)
+        check(agent.state == "ok" and agent.fw_version == "1.2.0", f"롤백 명령 뒤: 상태 ok, 버전은 그대로 1.2.0 (got {agent.state} {agent.fw_version})")
+        check(st["current"] == "1.2.0" and st["previous"] == good["version"], f"슬롯도 그대로: current 1.2.0, previous {good['version']} (got {st})")
+        check(os.readlink(os.path.join(slot_root, "current")) == os.path.join("slots", "1.2.0"), "current 링크도 1.2.0")
+        # 설치가 '성공'한 뒤의 롤백은 여전히 이전 슬롯으로 간다 (같은 단계의 다른 장치가 비정상이라 배포기가 되돌리는 경우)
+        BROKER.publish(agent.topic_cmd, json.dumps({"cmd": "ota_rollback"}).encode("utf-8"), 1, False)
+        check(agent.fw_version == good["version"] and ota_apply.current_version(slot_root) == good["version"],
+              f"성공한 설치 뒤의 롤백은 이전 버전으로: {agent.fw_version}")
+    finally:
+        stop_fleet([agent])
+
+
 # ---------- 7: 자율 업데이트 ----------
 def test_auto_update(work, base_url, good_manifest_path):
     slot_root = os.path.join(work, "auto-slots")
@@ -272,6 +302,7 @@ if __name__ == "__main__":
         time.sleep(0.2)
         v = test_fleet_good(agents, base_url + "/manifest.json")
         test_fleet_bad(agents, base_url + "/manifest-bad.json", v)
+        test_rollback_after_rejected_install(base_url, good, bad, work)
         test_auto_update(work, base_url, good_path)
         test_arch_and_hook(base_url, good, badhook, work)
     finally:

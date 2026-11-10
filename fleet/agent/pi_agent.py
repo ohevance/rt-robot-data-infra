@@ -23,6 +23,7 @@
 """
 import argparse
 import os
+import signal
 import sys
 import time
 
@@ -108,6 +109,13 @@ def parse_window(text):
     return (int(h0), int(h1))
 
 
+def raise_keyboard_interrupt(signum, frame):
+    """SIGTERM(systemd 의 stop·재부팅)을 Ctrl+C 와 같은 길로 보낸다 → main 의 finally 가 agent.stop() 을 부른다.
+    왜: 파이썬은 SIGTERM 을 받으면 그 자리에서 죽는다. 그러면 "정상 종료"인데도 offline 을 스스로 남기지 못하고
+    브로커의 유언(비정상 종료용)에 기대게 된다. 서비스로 도는 프로그램에게 SIGTERM 은 가장 흔한 '정상' 종료다 (11/11)."""
+    raise KeyboardInterrupt
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--device-id", default="pi-rt")
@@ -138,6 +146,7 @@ def main():
         print(f"auto-update once: installed={installed} fw={agent.fw_version} stage={agent.ota_stage} error={agent.ota_error}")
         return 0 if agent.state != "fault" else 1
 
+    signal.signal(signal.SIGTERM, raise_keyboard_interrupt)
     agent.start()
     if a.auto_update:
         agent.enable_auto_update(a.auto_update, a.poll_s, parse_window(a.window))
@@ -150,6 +159,7 @@ def main():
         pass
     finally:
         agent.stop()
+        print(f"pi agent: {a.device_id} 정상 종료 (offline 발행, 마지막 seq {agent.seq - 1})")
     return 0
 
 

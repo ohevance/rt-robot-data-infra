@@ -335,7 +335,15 @@ def run_rollout(version, stages, apply_s, health_wait, max_fail, bad, discover_s
     kinds = w.snapshot(devices)
     real = [d for d in devices if kinds.get(d, {}).get("kind") == "real"]
     if manifest is not None:
-        r.mark(f"산출물 {manifest['url']} (sha256 {str(manifest.get('sha256', ''))[:12]}…, {manifest.get('size')} bytes)")
+        # 아키텍처가 둘 이상이면 전부 적는다 — 병합 매니페스트의 최상위 url 은 글롭 순서상 aarch64 라서, 그것만 찍으면
+        # x86_64 가상 장치에 aarch64 파일을 보내는 것처럼 읽힌다 (장치는 arch 맵에서 자기 것을 고른다)
+        arch_map = manifest.get("arch") or {}
+        if arch_map:
+            for arch in sorted(arch_map):
+                e = arch_map[arch]
+                r.mark(f"산출물 [{arch}] {e.get('url')} (sha256 {str(e.get('sha256', ''))[:12]}…, {e.get('size')} bytes)")
+        else:
+            r.mark(f"산출물 {manifest['url']} (sha256 {str(manifest.get('sha256', ''))[:12]}…, {manifest.get('size')} bytes)")
     if real:
         r.mark(f"실물 장치 {len(real)}대는 마지막 순서: {real}")
     success = r.run(devices)
@@ -353,7 +361,8 @@ def run_rollout(version, stages, apply_s, health_wait, max_fail, bad, discover_s
     }
     if manifest is not None:
         result["manifest"] = {"source": manifest.get("manifest_source"), "url": manifest.get("url"),
-                              "sha256": manifest.get("sha256"), "size": manifest.get("size"), "commit": manifest.get("commit")}
+                              "sha256": manifest.get("sha256"), "size": manifest.get("size"), "commit": manifest.get("commit"),
+                              "arch": manifest.get("arch") or {}}
     if db_log is not None:
         db_log.summary(result, started_at, finished_at)
         db_log.close()

@@ -200,10 +200,20 @@ class DeviceAgent:
                 reply["mode"] = "artifact" if (url and self.slot_root is not None) else "simulated"
         elif name == "ota_rollback":
             # 진짜 설치 경로에서는 슬롯의 state.json 이 "이전 버전"의 기준이다 (버전 문자열 기억은 흉내 경로용)
+            # 순서가 중요하다 (11/11 수정): "직전 설치가 실패했는가"를 먼저 본다.
+            #   install() 은 실패하면 current 를 건드리지 않았거나(sha 불일치·자가 점검 실패) 스스로 되돌렸다(훅 실패).
+            #   그러니 되돌릴 슬롯이 없다 — 상태만 정상으로. 전에는 previous 슬롯이 있는지를 먼저 봐서, 두 번째 릴리스 뒤에
+            #   깨진 패키지가 오면 "거부한 장치"가 멀쩡한 현재 버전에서 한 단계 더 옛 버전으로 내려갔다(슬롯이 비어 있던 시험에서는 안 보였다).
             slot_previous = None
             if self.slot_root is not None:
                 slot_previous = ota_apply.read_state(self.slot_root).get("previous")
-            if slot_previous is not None:
+            if self.state == "fault" and self.ota_error is not None:
+                self.state = "ok"
+                self.ota_stage = "rolled_back"
+                reply["ok"] = True
+                reply["fw_version"] = self.fw_version
+            elif slot_previous is not None:
+                # 설치는 성공했는데 배포기가 되돌리기로 한 경우(같은 단계의 다른 장치가 비정상) → 슬롯을 이전 버전으로
                 restored = ota_apply.rollback(self.slot_root)
                 if restored is not None:
                     self.fw_version = restored
@@ -212,12 +222,6 @@ class DeviceAgent:
                     self.ota_stage = "rolled_back"
                     reply["ok"] = True
                     reply["fw_version"] = self.fw_version
-            elif self.state == "fault" and self.ota_error is not None:
-                # 설치가 전환 전에 실패한 경우(sha 불일치·자가 점검 실패): current 는 안 바뀌었으니 되돌릴 것이 없다. 상태만 정상으로
-                self.state = "ok"
-                self.ota_stage = "rolled_back"
-                reply["ok"] = True
-                reply["fw_version"] = self.fw_version
             elif self.prev_fw_version is not None:
                 self.fw_version = self.prev_fw_version
                 self.prev_fw_version = None
