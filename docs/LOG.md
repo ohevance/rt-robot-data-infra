@@ -175,4 +175,5 @@
 - 테스트: `test_ota_artifact.py` 9가지 통과(가짜 브로커 + 진짜 설치), 기존 3개 통과. 샌드박스 끝-대-끝(진짜 x86_64 패키지, 가짜 브로커): 50대 단계 배포 5 % 0.6 s → 50 % 1.0 s → 100 % 1.2 s, 전체 3.95 s; 깨진 패키지 3대에서 거부(자가 점검 exit 1) → 롤백 0.2 s. 러너 숫자는 첫 태그 뒤 E22 에.
 - 고친 것 둘: tar 의 최상위 폴더 한 겹을 벗기지 않아 `selftest.sh` 를 못 찾고 "점검 없음"으로 통과하던 버그(테스트가 잡음); 진짜 설치 경로에서 롤백이 버전 문자열 기억(`prev_fw_version`)을 써서 슬롯과 어긋나던 것 → 슬롯의 `state.json` 이 기준.
 - 문서: `docs/RELEASE.md`(그림·매니페스트·A/B·세 모드·Pi 서비스·면접 질문 9개), E22, DECISIONS 4건, README·EXPERIMENTS·HANDOVER·fleet/README·READING_GUIDE·GLOSSARY.- (같은 날 오후) 운영 층을 EC2 로 올릴 준비: `fleet/common/mqtt_conn.py`(TLS·인증을 환경변수로, 에이전트·수집기·배포기 공통), `fleet/mosquitto/mosquitto-prod.conf`(내부 1883 + 외부 8883 TLS·비밀번호), `fleet/docker-compose.prod.yml`, `deploy/ec2/setup.sh`·`make_certs.sh`·`README.md`(콘솔 순서·보안 그룹·비용), `deploy/pi/`(서비스·환경 파일 예시·설치). 인증서 생성은 샌드박스에서 확인(SAN·검증 OK), 서버 설치 자체는 계정이 생긴 뒤 첫 실행. 단위 테스트 4개 통과(보안 설정이 없으면 전과 같이 돈다).
+- AWS 계정 생성(새 가입 방식 Builder ID): 무료 플랜 자동 등록, 루트 사용자 없음, **리전 시드니 고정**(서울 선택 불가). 무료로 시작하고 필요하면 유료 전환 뒤 서울로 이전하기로. `deploy/ec2/README.md` 를 시드니·MFA(settings.aws.com)·예산 30/50/100(크레딧 체크 해제)·탄력적 IP·"서버: 시드니" 표기 규칙으로 고침. DECISIONS 에 앞당긴 이유와 리전 이유.
 

@@ -48,6 +48,6 @@
 - WSL 잔일: 수집기 `--qos 1`, 가상 장치 `--telemetry-qos 1` 로 되돌리기(다시 관제를 띄울 때) · CI 초록 확인(`gh run list -L 1`).
 - (완료 11/06) ALLEX 프로필 + E21(WSL 1 kHz · 500 Hz, 러너 1 kHz) → 500 Hz 기본. 남은 것: 노드 안 `work_us`·drop(500 Hz), 조건별 3회 반복·10초 측정(테스트에 주기 수 옵션).
 - (1차 완료 11/10) **릴리스 → 배포 파이프라인**(`docs/RELEASE.md`): OTA 를 진짜 설치로(내려받기·sha256·A/B 슬롯·자가 점검·롤백), `release.yml`(태그 → 패키지 x86_64·aarch64 → 가상 50대 카나리 → Release), Pi 자율 업데이트(`pi_agent.py --auto-update`). **남은 것**: 첫 태그 `v0.9.0-rc1` 올려 러너 카나리 값을 E22 에, Pi 에서 `pi_agent.py --once` 1회 + 서비스 등록, 설계서·장표에 반영. 다음 단계: 헬스 게이트에 RT 지표, ed25519 서명, `post_switch.sh` 노드 재시작, 운영 층을 클라우드 VM(EC2, 신규 계정 6개월 무료)으로 — 면접 전 하루.
-- (준비됨 11/10) 운영 층을 EC2 로: `deploy/ec2/README.md` 순서대로(가입 → 예산 알림 → 인스턴스·보안 그룹 → `setup.sh` → Pi `deploy/pi/install.sh`). 접속 정보·비밀번호는 서버의 `~/fleet-server-info.txt` 에만.
+- (진행 중 11/10, 계정 있음·리전 시드니 고정) 운영 층을 EC2 로 — 서버 왕복 숫자에는 "서버: 시드니" 표기: `deploy/ec2/README.md` 순서대로(가입 → 예산 알림 → 인스턴스·보안 그룹 → `setup.sh` → Pi `deploy/pi/install.sh`). 접속 정보·비밀번호는 서버의 `~/fleet-server-info.txt` 에만.
 - 보류(면접에서 "다음 단계"로): 수동 ACK(DB 적재 뒤 PUBACK), 중력 보상(토크 피드포워드), 실물 SO-101 시리얼 백엔드 + 안전 정지, MCAP 구간 추출·업로드, 기록 요약을 관제로 1 Hz 올리기.
 - 잔일: `docs/measurements/table3.md` 표③-1(최근 60분 집계)이 장애 실험 구간을 포함해 '초당 메시지 최대 20000 · 전달 지연 max 5,603,338 ms · 유실 −130%' 처럼 깨진 값이다 — 관제를 깨끗이 10분 돌린 뒤 `python3 scripts/make_table3.py --minutes 10` 으로 다시 만들 것(장표·설계서는 p50/p95 1/2 ms 만 인용). 읽기 가이드의 "한 함수 40줄"을 넘는 함수(`rt_loop.cpp` run, `rt_control_node.cpp` publish_status, `make_dashboard.py` build, `diag.py` 등) 쪼개기.
