@@ -7,6 +7,7 @@
   collector     : label 에 qos1 이 있으면 유실 0 / qos0 이면 유실 > 0 이어야 정상 (보호가 없음을 "보여 주는" 실험)
   bad_firmware  : 롤백 성공(success=false), 나쁜 버전이 닿은 장치 = 5% 단계(ceil) 만, 롤백 시간 있음
   ota (성공 배포) : success=true, 전 장치 새 버전
+  ota 산출물(-bad 버전) : 자가 점검이 거부 → success=false, 닿은 장치 = 첫 단계(ceil) 만, 롤백 시간 있음, 타임라인에 '설치 실패' 
 
 사용:  python3 fleet/chaos/assert_results.py build/fault_broker.json build/fault_db.json ...
 종료 코드 0 = 전부 통과
@@ -55,8 +56,20 @@ def assert_fault(r):
 
 
 def assert_ota(r):
-    check(r.get("success") is True, f"ota {r['version']}: 성공")
+    mode = r.get("mode", "simulated")
+    if str(r.get("version", "")).endswith("-bad"):
+        first_pct = (r.get("stages_pct") or [5])[0]
+        canary = int(math.ceil(r["devices"] * first_pct / 100.0))
+        check(r.get("success") is False, f"ota {r['version']} ({mode}): 나쁜 산출물은 롤백으로 끝났다")
+        check(r.get("updated_devices") == canary, f"ota {r['version']}: 닿은 장치 {r.get('updated_devices')} == 첫 단계 {canary}")
+        check(r.get("rollback_s") is not None, f"ota {r['version']}: 롤백 시간 {r.get('rollback_s')}초")
+        if mode == "artifact":
+            check(any("설치 실패" in e.get("event", "") for e in r.get("timeline", [])), f"ota {r['version']}: 자가 점검이 거부했다('설치 실패')")
+        return
+    check(r.get("success") is True, f"ota {r['version']} ({mode}): 성공")
     check(r.get("updated_devices") == r.get("devices"), f"ota {r['version']}: {r.get('updated_devices')}/{r.get('devices')} 장치 갱신")
+    if mode == "artifact":
+        check(bool((r.get("manifest") or {}).get("sha256")), f"ota {r['version']}: 산출물 sha256 이 결과에 남는다")
 
 
 def main(paths):

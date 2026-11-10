@@ -6,28 +6,50 @@
   2) 브로커와 끊기면 메시지를 메모리에 모아 두었다가(store-and-forward) 다시 붙으면 QoS 1 로 재전송
   3) 접속 시 fleet/<id>/status 에 "online"(보관 메시지), 끊길 때 브로커가 대신 "offline" 을 남김 (LWT, 유언)
   4) fleet/<id>/cmd 로 오는 명령을 받음: ping · set_state · health · ota · ota_rollback
-     - ota : 새 펌웨어 "적용"을 흉내 낸다 (apply_s 동안 state=updating → fw_version 교체).
-             bad=true 면 적용 뒤 state=fault (나쁜 펌웨어 시뮬레이션) → 서버가 롤백을 결정한다
-     - ota_rollback : 이전 버전으로 되돌리고 state=ok
+     - ota (url 있음) : 진짜 설치 — 내려받기 → sha256 → A/B 슬롯 → 자가 점검 → current 전환 (ota_apply.py). 11/10 부터.
+                        실패하면 state=fault 와 ota_error 를 텔레메트리에 실어 서버의 헬스 게이트가 보게 한다
+     - ota (url 없음) : 옛 흉내 경로 — apply_s 동안 state=updating → fw_version 교체. bad=true 면 fault (단위 테스트·장애 주입용)
+     - ota_rollback   : 이전 슬롯(또는 이전 버전 문자열)으로 되돌리고 state=ok
+  5) 자율 업데이트(선택, --auto-update): poll_s 마다 매니페스트 URL 을 읽어 새 버전이면 스스로 설치한다.
+     지휘소(브로커·rollout.py)가 없어도 되는 경로 — 항상 켜진 서버가 없는 현장용. 점검 시간대와 state==ok 일 때만.
 
-읽는 순서: DeviceAgent.__init__ → start → tick (한 주기) → on_connect (재접속 시 버퍼 비우기) → on_message (명령) → apply_ota
+읽는 순서: DeviceAgent.__init__ → start → tick (한 주기) → on_connect (재접속 시 버퍼 비우기) → on_message (명령)
+           → apply_ota (흉내) / apply_ota_artifact (진짜) → auto_update_loop
 
-실물 장치(Pi, RT 노드)도 같은 클래스를 쓴다. 다른 것은 metrics_source(어디서 숫자를 가져오나)뿐이다.
+실물 장치(Pi, RT 노드)도 같은 클래스를 쓴다. 다른 것은 metrics_source(어디서 숫자를 가져오나)와 kind("real") 뿐이다.
 """
 import json
+import os
+import platform
+import sys
 import threading
 import time
+import urllib.request
 from collections import deque
 
 import paho.mqtt.client as mqtt
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ota_apply  # noqa: E402
 
 MAX_BUFFER = 3600  # 끊겼을 때 모아 두는 최대 개수 (1 Hz 기준 1시간). 넘치면 가장 오래된 것을 버린다
 
 
 class DeviceAgent:
     def __init__(self, device_id, broker_host, broker_port, period_s, metrics_source, fw_version="1.0.0",
-                 keepalive_s=10, telemetry_qos=0):
+                 keepalive_s=10, telemetry_qos=0, slot_root=None, kind="virtual"):
         self.device_id = device_id
+        self.kind = kind                      # "virtual" | "real" — 배포기가 실물을 마지막 단계로 보내는 데 쓴다
+        self.slot_root = slot_root            # A/B 슬롯 디렉터리. None 이면 ota 는 흉내 경로만 된다
+        self.ota_stage = None                 # 마지막 설치가 어디까지 갔나 (텔레메트리에 실린다)
+        self.ota_error = None
+        self.auto_update = None               # {"url":..., "poll_s":..., "window":(h0,h1) | None}
+        self.auto_thread = None
+        if slot_root is not None:
+            os.makedirs(slot_root, exist_ok=True)
+            installed = ota_apply.current_version(slot_root)
+            if installed is not None:
+                fw_version = installed        # 재시작하면 현재 슬롯의 버전이 곧 내 버전이다
         self.period_s = period_s
         self.keepalive_s = keepalive_s        # 이 시간 동안 아무것도 못 받으면 PINGREQ 를 보낸다 (브로커는 1.5배 안에 못 들으면 끊고 유언 발행)
         self.telemetry_qos = telemetry_qos    # 0: 보내고 잊음(기본, 가장 가벼움) / 1: 브로커가 받았다는 확인까지 (수집기 끊김 때 유실 0 에 필요)
@@ -97,6 +119,9 @@ class DeviceAgent:
             "ts_ns": time.time_ns(),      # 벽시계(UTC). 수집기가 "도착 - 측정" 으로 수집 지연을 계산한다
             "fw_version": self.fw_version,
             "state": self.state,
+            "kind": self.kind,
+            "ota_stage": self.ota_stage,
+            "ota_error": self.ota_error,
             "buffered": self.buffered_total,
             "flushed": self.flushed_total,
             "reconnects": self.reconnects,
@@ -155,19 +180,46 @@ class DeviceAgent:
             reply["state"] = self.state
         elif name == "ota":
             version = str(cmd.get("version", ""))
+            url = cmd.get("url")
             apply_s = float(cmd.get("apply_s", 2.0))
             bad = bool(cmd.get("bad", False))
             if version and self.ota_thread is None:
                 # 적용은 시간이 걸리므로 별도 스레드에서. 그동안 텔레메트리는 state=updating 으로 계속 나간다
-                self.ota_thread = threading.Thread(target=self.apply_ota, args=(version, apply_s, bad), daemon=True)
+                if url and self.slot_root is not None:
+                    picked = pick_artifact(cmd)
+                    args = (version, picked["url"], picked.get("sha256", ""), picked.get("size"))
+                    self.ota_thread = threading.Thread(target=self.apply_ota_artifact, args=args, daemon=True)
+                else:
+                    self.ota_thread = threading.Thread(target=self.apply_ota, args=(version, apply_s, bad), daemon=True)
                 self.ota_thread.start()
                 reply["ok"] = True
                 reply["applying"] = version
+                reply["mode"] = "artifact" if (url and self.slot_root is not None) else "simulated"
         elif name == "ota_rollback":
-            if self.prev_fw_version is not None:
+            # 진짜 설치 경로에서는 슬롯의 state.json 이 "이전 버전"의 기준이다 (버전 문자열 기억은 흉내 경로용)
+            slot_previous = None
+            if self.slot_root is not None:
+                slot_previous = ota_apply.read_state(self.slot_root).get("previous")
+            if slot_previous is not None:
+                restored = ota_apply.rollback(self.slot_root)
+                if restored is not None:
+                    self.fw_version = restored
+                    self.prev_fw_version = None
+                    self.state = "ok"
+                    self.ota_stage = "rolled_back"
+                    reply["ok"] = True
+                    reply["fw_version"] = self.fw_version
+            elif self.state == "fault" and self.ota_error is not None:
+                # 설치가 전환 전에 실패한 경우(sha 불일치·자가 점검 실패): current 는 안 바뀌었으니 되돌릴 것이 없다. 상태만 정상으로
+                self.state = "ok"
+                self.ota_stage = "rolled_back"
+                reply["ok"] = True
+                reply["fw_version"] = self.fw_version
+            elif self.prev_fw_version is not None:
                 self.fw_version = self.prev_fw_version
                 self.prev_fw_version = None
                 self.state = "ok"
+                self.ota_stage = "rolled_back"
                 reply["ok"] = True
                 reply["fw_version"] = self.fw_version
         client.publish(self.topic_cmd_reply, json.dumps(reply), qos=1)
@@ -176,6 +228,8 @@ class DeviceAgent:
     def apply_ota(self, version, apply_s, bad):
         """apply_s 동안 'updating' → 버전 교체 → 정상이면 ok, 나쁜 펌웨어면 fault"""
         self.state = "updating"
+        self.ota_stage = "simulated"
+        self.ota_error = None
         time.sleep(apply_s)
         self.prev_fw_version = self.fw_version
         self.fw_version = version
@@ -184,3 +238,87 @@ class DeviceAgent:
         else:
             self.state = "ok"
         self.ota_thread = None
+
+    # ---------- OTA 진짜 설치 (별도 스레드) ----------
+    def apply_ota_artifact(self, version, url, sha256, size):
+        """내려받기 → 검증 → A/B 슬롯 → 자가 점검 → 전환. 성공이면 fw_version 교체·ok, 실패면 fault + ota_error"""
+        self.state = "updating"
+        self.ota_error = None
+        self.ota_stage = "downloading"
+        r = ota_apply.install(self.slot_root, version, url, sha256, size)
+        self.ota_stage = r.stage
+        if r.ok:
+            self.prev_fw_version = None   # 이전 버전은 슬롯의 state.json 이 기억한다
+            self.fw_version = version
+            self.state = "ok"
+        else:
+            # current 는 그대로(1~4단계 실패) — 그래도 state=fault 로 알려 서버가 "이 빌드는 문제" 라고 판단하게 한다
+            self.ota_error = r.error[:200]
+            self.state = "fault"
+        self.ota_thread = None
+
+    # ---------- 자율 업데이트 (지휘소 없이, 선택) ----------
+    def enable_auto_update(self, manifest_url, poll_s=600.0, window=None):
+        """poll_s 마다 manifest_url 을 읽어 새 버전이면 스스로 설치. window=(시작시, 끝시) 면 그 시간대에만 (예: (3, 5))"""
+        self.auto_update = {"url": manifest_url, "poll_s": float(poll_s), "window": window}
+        self.auto_thread = threading.Thread(target=self.auto_update_loop, name=f"auto-{self.device_id}", daemon=True)
+        self.auto_thread.start()
+
+    def in_window(self, now=None):
+        window = self.auto_update.get("window") if self.auto_update else None
+        if window is None:
+            return True
+        hour = time.localtime(now if now is not None else time.time()).tm_hour
+        h0, h1 = window
+        if h0 <= h1:
+            return h0 <= hour < h1
+        return hour >= h0 or hour < h1   # 자정을 넘기는 창 (예: 23~2)
+
+    def auto_update_loop(self):
+        while self.running and self.auto_update is not None:
+            try:
+                self.auto_update_once()
+            except Exception as e:  # 매니페스트를 못 읽는 것은 흔한 일(네트워크) — 다음 폴링에 다시
+                self.ota_error = f"manifest: {e.__class__.__name__}: {e}"[:200]
+            deadline = time.monotonic() + self.auto_update["poll_s"]
+            while self.running and time.monotonic() < deadline:
+                time.sleep(0.5)
+
+    def auto_update_once(self):
+        """매니페스트 한 번 읽고 필요하면 설치. 설치했으면 True"""
+        if self.ota_thread is not None or self.state != "ok" or not self.in_window():
+            return False
+        manifest = fetch_manifest(self.auto_update["url"])
+        version = str(manifest.get("version", ""))
+        if not version or version == self.fw_version:
+            return False
+        picked = pick_artifact(manifest)
+        url = picked.get("url")
+        if not url:
+            raise ValueError(f"매니페스트에 이 아키텍처({platform.machine()})용 산출물이 없다")
+        if not (url.startswith("http") or url.startswith("file://") or url.startswith("/")):
+            # 매니페스트와 같은 폴더의 상대 경로 (Release 자산은 같은 폴더에 놓인다)
+            url = self.auto_update["url"].rsplit("/", 1)[0] + "/" + url
+        self.apply_ota_artifact(version, url, picked.get("sha256", ""), picked.get("size"))
+        return True
+
+
+def pick_artifact(entry, machine=None):
+    """매니페스트(또는 ota 명령)에서 이 장치의 아키텍처 항목을 고른다. arch 맵이 없거나 내 아키텍처가 없으면 최상위 url/sha256/size.
+    러너·가상 장치는 x86_64, Pi 는 aarch64 — 같은 매니페스트를 보고 서로 다른 파일을 받는다"""
+    if machine is None:
+        machine = platform.machine()
+    arch_map = entry.get("arch") or {}
+    if machine in arch_map:
+        return dict(arch_map[machine])
+    return {"url": entry.get("url"), "sha256": entry.get("sha256", ""), "size": entry.get("size")}
+
+
+def fetch_manifest(url, timeout_s=20.0):
+    if url.startswith("file://"):
+        url = url[len("file://"):]
+    if url.startswith("http://") or url.startswith("https://"):
+        with urllib.request.urlopen(url, timeout=timeout_s) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    with open(url, encoding="utf-8") as f:
+        return json.load(f)

@@ -9,7 +9,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | 직무 요구 | 산출물 | 수치 | 상태 |
 |---|---|---|---|
 | ① 실시간 Linux 미들웨어, ROS 2/DDS | `rt_control/rt_core` RT 루프 + 측정기 + 제어 단계 + 상태 머신, `rt_control/ros2_adapter` ROS 2 노드, `dds_bench` | 표① 지연·지터 (p99.9/max) · 표② DDS 손실·지연 · 노드 `rt_status`(wake/work us, state) | 작성 완료, WSL 실행 확인(노드·DDS). **Pi 4 실측 완료(11/04~05)**: 일반 → PREEMPT_RT → 고정 → 격리, `table1_pi4.md` |
-| ② 실시간 로깅·모니터링·시각화·업데이트 | `fleet` 수집 → TimescaleDB → Grafana(14 패널), OTA 단계 배포·헬스 게이트·자동 롤백, 장애 주입 4종 | 표③-1 처리량·전달 지연 · 표③-2 장애 감지·복구·유실 · 표③-3 OTA 롤백 시간 | 완료 — WSL 실측(11/04 표③-2·③-3), CI 러너에서도 매 push 재실행 |
+| ② 실시간 로깅·모니터링·시각화·업데이트 | `fleet` 수집 → TimescaleDB → Grafana(14 패널), OTA 단계 배포·헬스 게이트·자동 롤백, 장애 주입 4종, **릴리스 → 배포 파이프라인**(태그 → 빌드 → 패키지 → 가상 50대 카나리 → Release 게시 → 장치가 내려받아 sha256·A/B 슬롯·자가 점검으로 설치, 실물은 자율 업데이트) `docs/RELEASE.md` | 표③-1 처리량·전달 지연 · 표③-2 장애 감지·복구·유실 · 표③-3 OTA 롤백 시간 · E22 50대 설치 시간 | 완료 — WSL 실측(11/04 표③-2·③-3), CI 러너에서도 매 push 재실행; 릴리스 파이프라인 11/10 |
 | ③ 센서 스트리밍·로깅·전처리 자동화 | `fleet` 장치 에이전트(가상 50 + RT 노드 1), store-and-forward, 수집기 backlog, QoS 0/1 · **`data_pipeline`** 로봇 안 100 Hz 기록(rosbag2 MCAP) → CSV → 검증 요약 | 초당 메시지, 전달 지연 p95, 유실 % · 기록 실제 Hz·틈·추종 오차 | 작성 완료, WSL 실행 확인(기록 11/05) |
 | ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100 6 자유도 · **위로보틱스 공개 ALLEX 48 자유도**, 프로필만 다름), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스 ×2 모델) | CI 배지, 테스트 수(C++ 5 · Python 15 · 통합 1), 물리 한 주기 비용 p99(6 · 48 자유도) | 완료, CI 초록(ALLEX 단계 포함) — ALLEX 1 kHz p99 622(WSL) · 458(러너) us → **프로필 500 Hz**(실측 p99 1,000 = 2 ms 의 50 %), E21 |
 
@@ -40,6 +40,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | 전달 지연 10초 주기 튐의 원인 | keepalive 박자 — 10초: 10.0초 간격 튐, 30초: 0회 | WSL2, A/B | `docs/LOG.md` 11/04 |
 | 나쁜 펌웨어 단계 배포 → 닿은 장치, 롤백 | 3 / 50, 1.0초 | WSL2 | ③-3 |
 | 같은 장애 4종을 GitHub 러너에서 (10대 2 Hz) | 유실 0·0·0, 롤백 0.4초 | CI `fleet_integration` 1m52s | `table3_ci.md` |
+| **진짜 산출물 OTA** 50대: 단계별 적용 완료 5 / 50 / 100 %, 전체 · 깨진 패키지 | 0.6 / 1.0 / 1.2 s, 3.95 s · 3/50 에서 거부 → 롤백 0.2 s | 샌드박스(가짜 브로커 + 진짜 설치) — 러너 값은 첫 태그 뒤 | `ota_release_sandbox_*.json`, E22 |
 | 큐 상한을 넘겼을 때 (실험) | 7.5분 공백 중 마지막 49초분 2,450개 유실 | WSL2 | `docs/LOG.md` 11/04 |
 
 실시간 **지연의 진짜 값**은 Raspberry Pi 4 + PREEMPT_RT 실측(위 Pi 줄들)이다. 한 변수씩 바꾼 사슬(커널 → 고정 → 격리)과 그 이유는 [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) 의 순서도, 각 실험의 상세는 [`docs/experiments/`](docs/experiments/README.md). WSL 값은 "코드가 돌아간다 + 상대 비교"의 증거다.
@@ -48,9 +49,10 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 - `rt_control/rt_core` — ROS 2와 무관한 순수 C++17 RT 핵심: SPSC 락프리 링 버퍼, 1 kHz RT 루프(SCHED_FIFO · mlockall · 절대 시각 타이머), 매 주기 할 일(RtStep), 제어 단계(ControlStep: 최신 명령 · 워치독 · 변화량 제한 · **상태 머신**), 백엔드 2종(**SimLag · MuJoCo**), `jitter_bench` 측정기, 단위 테스트 4개(+MuJoCo 1)
 - `rt_control/ros2_adapter` — ROS 2 Jazzy 노드 `rt_control_node`: `/joint_command` 구독 → RT 스레드 → `/joint_states` 100 Hz · `/rt_status` 1 Hz(JSON: wake/work us, 드롭, 워치독, state, backend, rmw). 파라미터 `backend: sim_lag | mujoco`
 - `dds_bench` — DDS 구현체 × QoS × 크기별 RTT·손실률 측정 → 표② (WSL 실측 16행 포함)
-- `fleet` — Mosquitto·TimescaleDB·Grafana(docker-compose), 장치 에이전트(버퍼·재전송·유언·**OTA 적용/롤백**), 가상 장치 N대, RT 노드 다리, 수집기(1초 묶음 COPY + 통계 + **DB 끊김 backlog** + **지속 세션 옵션**), **OTA 단계 배포기**, **장애 주입 4종 + 판정**, 진단 도구, DB 마이그레이션, 대시보드 생성기(14 패널), 단위 테스트 3개(가짜 브로커·DB) + 통합 테스트 스크립트
-- `scripts/` — `cyclictest_run.sh` · **`jitter_run.sh`**(표① 측정 한 줄, 온도·스로틀 기록), `make_table1/2/3.py`(표), `profile_to_params.py`(로봇 프로필 → ROS 파라미터, 백엔드 선택), **`get_mujoco.sh`**(MuJoCo + Menagerie 모델)
-- `.github/workflows/ci.yml` — 3잡: 빌드·단위 테스트·1 kHz 연기 테스트 → 진짜 컨테이너 통합(장애 3종 + OTA) · MuJoCo 헤드리스
+- `fleet` — Mosquitto·TimescaleDB·Grafana(docker-compose), 장치 에이전트(버퍼·재전송·유언·**OTA 진짜 설치**: 내려받기·sha256·A/B 슬롯·자가 점검·롤백, **자율 업데이트**), 실물 보드 에이전트 `pi_agent.py`, 가상 장치 N대, RT 노드 다리, 수집기(1초 묶음 COPY + 통계 + **DB 끊김 backlog** + **지속 세션 옵션**), **OTA 단계 배포기**, **장애 주입 4종 + 판정**, 진단 도구, DB 마이그레이션, 대시보드 생성기(14 패널), 단위 테스트 3개(가짜 브로커·DB) + 통합 테스트 스크립트
+- `scripts/` — `cyclictest_run.sh` · **`jitter_run.sh`**(표① 측정 한 줄, 온도·스로틀 기록), `make_table1/2/3.py`(표), `profile_to_params.py`(로봇 프로필 → ROS 파라미터, 백엔드 선택), **`get_mujoco.sh`**(MuJoCo + Menagerie 모델), **`package_release.sh`**(릴리스 패키지·sha256·매니페스트) · `merge_manifests.py` · `make_release_report.py`
+- `.github/workflows/ci.yml` — 3잡: 빌드·단위 테스트·1 kHz 연기 테스트 → 진짜 컨테이너 통합(장애 3종 + OTA 흉내 + **산출물 OTA 정상·깨진 패키지**) · MuJoCo 헤드리스 2모델
+- `.github/workflows/release.yml` — **태그 → 패키지(x86_64·aarch64) → 가상 50대 카나리 → GitHub Release 게시** — `docs/RELEASE.md`
 - `data_pipeline/` — 로봇 안 고주기 데이터 기록(rosbag2 MCAP) → CSV → 검증 요약(주기·틈·추종 오차)
 - `robots/` — 로봇 프로필(SO-101 6 자유도 · **ALLEX 48 자유도**, 위로보틱스 공개 모델 `scripts/get_allex.sh`) · `backends/mujoco/README.md` — MuJoCo 설치·실행, ALLEX 는 §6
 - `docs/` — 읽기 가이드(26 항목) · **실험 목록**(한 표) · 구조 · 용어집 · 결정 기록 · 작업 로그 · 설치 안내 · `measurements/`(표①②③ 원본 JSON·txt)
@@ -60,7 +62,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 cmake -S rt_control/rt_core -B build/rt_core -DCMAKE_BUILD_TYPE=Release && cmake --build build/rt_core -j
 ctest --test-dir build/rt_core --output-on-failure          # 링 버퍼 · 제어 단계 · 상태 머신 · 1 kHz 연기(드롭 0)
 ./build/rt_core/jitter_bench --no-rt --seconds 5
-python3 fleet/tests/test_fleet_logic.py && python3 fleet/tests/test_ota_rollout.py && python3 fleet/tests/test_collector_resilience.py
+python3 fleet/tests/test_fleet_logic.py && python3 fleet/tests/test_ota_rollout.py && python3 fleet/tests/test_ota_artifact.py && python3 fleet/tests/test_collector_resilience.py
 ```
 관제·OTA·장애 주입(도커 필요): [`fleet/README.md`](fleet/README.md). MuJoCo: [`backends/mujoco/README.md`](backends/mujoco/README.md).
 

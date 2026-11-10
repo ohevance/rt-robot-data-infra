@@ -3,7 +3,8 @@
 
 한 번의 배포가 이렇게 진행된다 (기본 5% → 50% → 100%):
   1) 장치 찾기     : 텔레메트리를 몇 초 듣고 "지금 살아 있는 장치" 목록을 만든다
-  2) 단계 n        : 목록의 n% 까지 장치에 {"cmd":"ota","version":V} 를 보낸다
+  2) 단계 n        : 목록의 n% 까지 장치에 {"cmd":"ota","version":V[, "url","sha256","size"]} 를 보낸다
+                     (가상 장치 먼저, 실물(kind=real)은 맨 뒤 — 실물은 마지막 단계에서만 받는다)
   3) 적용 대기     : 그 장치들의 텔레메트리 fw_version 이 V 로 바뀔 때까지 기다린다 (시간 제한 있음)
   4) 헬스 게이트   : health_wait 초 동안 지켜보다가, state 가 ok 가 아닌 장치가 max_fail 보다 많으면 → 롤백
   5) 롤백          : 지금까지 V 를 받은 모든 장치에 ota_rollback → 이전 버전으로 돌아올 때까지 시간 측정 → 중단
@@ -14,11 +15,15 @@
   - 롤백 결정 → 전 장치 복구 완료까지 시간 (롤백이 일어난 경우)
   - 나쁜 펌웨어가 닿은 장치 수 vs 전체 (canary 가 막아 준 범위. 50대면 5% = 3대에서 멈춘다)
 
-읽는 순서: FleetWatcher(듣기·보내기) → wait_until → Rollout.run → run_stage → rollback → DbLog → run_rollout → main
+읽는 순서: load_manifest → FleetWatcher(듣기·보내기) → wait_until → Rollout.run → run_stage → wait_apply → rollback → DbLog → run_rollout → main
 
 사용:
-  python3 fleet/ota/rollout.py --version 1.1.0                      # 정상 배포 (5→50→100%)
-  python3 fleet/ota/rollout.py --version 1.2.0-bad --bad            # 나쁜 펌웨어: 1단계(5%)에서 잡혀 롤백되어야 한다
+  python3 fleet/ota/rollout.py --version 1.1.0                      # 흉내 배포 (버전 문자열만, 5→50→100%)
+  python3 fleet/ota/rollout.py --version 1.2.0-bad --bad            # 나쁜 펌웨어 흉내: 1단계(5%)에서 잡혀 롤백되어야 한다
+  python3 fleet/ota/rollout.py --manifest build/release/manifest.json            # 진짜 산출물 배포 (11/10 부터)
+  python3 fleet/ota/rollout.py --manifest https://github.com/<o>/<r>/releases/download/v1.2.0/manifest.json
+      매니페스트의 version·url·sha256·size·rollout 정책을 쓴다. 장치는 url 에서 내려받아 검증·설치한다(--slot-root 로 뜬 장치만).
+      --stages 등 명령줄 값을 주면 매니페스트보다 우선한다.
 결과: 화면 타임라인 + docs/measurements/ota_<version>.json
       (+ DB 가 있으면 events 표에 kind='ota' 줄 단위 기록, ota_rollouts 표에 요약 한 줄)
 """
@@ -29,9 +34,34 @@ import os
 import sys
 import threading
 import time
+import urllib.request
 from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
+
+
+def load_manifest(path_or_url):
+    """manifest.json 을 읽고 url 을 절대 주소로 만든다 (상대 경로면 매니페스트와 같은 폴더 기준)"""
+    src = path_or_url
+    if src.startswith("http://") or src.startswith("https://"):
+        with urllib.request.urlopen(src, timeout=30) as resp:
+            m = json.loads(resp.read().decode("utf-8"))
+        base = src.rsplit("/", 1)[0]
+    else:
+        if src.startswith("file://"):
+            src = src[len("file://"):]
+        with open(src, encoding="utf-8") as f:
+            m = json.load(f)
+        base = "file://" + os.path.dirname(os.path.abspath(src))
+    def absolute(url):
+        if url and not (url.startswith("http://") or url.startswith("https://") or url.startswith("file://") or url.startswith("/")):
+            return base + "/" + url
+        return url
+    m["url"] = absolute(m.get("url", ""))
+    for arch, entry in (m.get("arch") or {}).items():
+        entry["url"] = absolute(entry.get("url", ""))
+    m["manifest_source"] = path_or_url
+    return m
 
 
 class FleetWatcher:
@@ -58,18 +88,21 @@ class FleetWatcher:
         if device_id is None:
             return
         with self.lock:
-            self.latest[device_id] = {"fw": d.get("fw_version"), "state": d.get("state"), "t": time.monotonic()}
+            self.latest[device_id] = {"fw": d.get("fw_version"), "state": d.get("state"), "kind": d.get("kind", "virtual"),
+                                      "ota_stage": d.get("ota_stage"), "ota_error": d.get("ota_error"), "t": time.monotonic()}
 
     def online_devices(self, within_s=5.0):
-        """최근 within_s 초 안에 텔레메트리를 보낸 장치 목록 (이름순)"""
+        """최근 within_s 초 안에 텔레메트리를 보낸 장치 목록 — 가상 먼저(이름순), 실물(kind=real)은 맨 뒤.
+        실물을 뒤로 두는 이유: 단계 배포의 앞 단계(5%)는 가상 장치가 맡고, 실물은 그 단계들이 통과한 뒤에만 받게 하려고"""
         now = time.monotonic()
         with self.lock:
             result = []
             for device_id in self.latest:
-                if now - self.latest[device_id]["t"] < within_s:
-                    result.append(device_id)
+                info = self.latest[device_id]
+                if now - info["t"] < within_s:
+                    result.append((1 if info.get("kind") == "real" else 0, device_id))
         result.sort()
-        return result
+        return [device_id for _, device_id in result]
 
     def snapshot(self, device_ids):
         """지정한 장치들의 최신 값 복사본"""
@@ -99,7 +132,8 @@ def wait_until(predicate, timeout_s, poll_s=0.2):
 
 
 class Rollout:
-    def __init__(self, watcher, version, stages_pct, apply_s, health_wait_s, max_fail, bad, db_log):
+    def __init__(self, watcher, version, stages_pct, apply_s, health_wait_s, max_fail, bad, db_log, manifest=None,
+                 apply_timeout_s=None):
         self.w = watcher
         self.version = version
         self.stages_pct = stages_pct
@@ -107,6 +141,10 @@ class Rollout:
         self.health_wait_s = health_wait_s
         self.max_fail = max_fail
         self.bad = bad
+        self.manifest = manifest      # None 이면 흉내 배포(버전 문자열만), 있으면 url/sha256/size 를 같이 보낸다
+        if apply_timeout_s is None:
+            apply_timeout_s = apply_s + 15.0
+        self.apply_timeout_s = apply_timeout_s
         self.db_log = db_log          # DbLog 또는 None
         self.updated = []             # 새 버전을 받은 장치 (누적)
         self.timeline = []            # {"t_s": 초, "event": 설명}
@@ -140,14 +178,31 @@ class Rollout:
 
     def run_stage(self, pct, batch):
         """한 단계: 보내기 → 적용 대기 → 헬스 게이트. 통과하면 True"""
-        self.mark(f"단계 {pct}%: {len(batch)}대에 ota 전송")
+        real_count = sum(1 for d in batch if self.w.snapshot([d]).get(d, {}).get("kind") == "real")
+        self.mark(f"단계 {pct}%: {len(batch)}대에 ota 전송" + (f" (실물 {real_count}대 포함)" if real_count else ""))
         for device_id in batch:
-            self.w.send(device_id, {"cmd": "ota", "version": self.version, "apply_s": self.apply_s, "bad": self.bad})
+            cmd = {"cmd": "ota", "version": self.version, "apply_s": self.apply_s, "bad": self.bad}
+            if self.manifest is not None:
+                cmd["url"] = self.manifest["url"]
+                cmd["sha256"] = self.manifest.get("sha256", "")
+                cmd["size"] = self.manifest.get("size")
+                if self.manifest.get("arch"):
+                    cmd["arch"] = self.manifest["arch"]   # 장치가 자기 아키텍처(x86_64 / aarch64) 항목을 고른다
+            self.w.send(device_id, cmd)
         self.updated.extend(batch)
 
-        took = wait_until(make_all_applied_check(self, batch), timeout_s=self.apply_s + 15.0)
+        took, failed = self.wait_apply(batch)
+        if failed:
+            snap = self.w.snapshot(failed)
+            reasons = sorted(set(str(snap.get(d, {}).get("ota_error") or snap.get(d, {}).get("ota_stage") or "?") for d in failed))
+            self.mark(f"단계 {pct}%: 설치 실패 {len(failed)}대 {sorted(failed)[:5]} — 사유 {reasons[:3]} → 롤백")
+            self.rollback()
+            return False
         if took is None:
-            self.mark(f"단계 {pct}%: 적용 시간 초과 → 롤백")
+            snap = self.w.snapshot(batch)
+            pending = sorted(d for d in batch if snap.get(d, {}).get("fw") != self.version)
+            stages_seen = sorted(set(str(snap.get(d, {}).get("ota_stage") or "?") for d in pending))
+            self.mark(f"단계 {pct}%: 적용 시간 초과 ({self.apply_timeout_s:.0f}초) — 미적용 {len(pending)}대 {pending[:5]}, 단계 {stages_seen[:3]} → 롤백")
             self.rollback()
             return False
         self.mark(f"단계 {pct}%: 전원 적용 완료 ({took:.1f}초)")
@@ -166,10 +221,26 @@ class Rollout:
             more = ""
             if len(unhealthy) > 10:
                 more = " ..."
-            self.mark(f"비정상 장치: {shown}{more} → 롤백 결정")
+            errors = sorted(set(str(snap.get(d, {}).get("ota_error")) for d in unhealthy if snap.get(d, {}).get("ota_error")))
+            self.mark(f"비정상 장치: {shown}{more}" + (f" 사유 {errors[:3]}" if errors else "") + " → 롤백 결정")
             self.rollback()
             return False
         return True
+
+    def wait_apply(self, batch):
+        """batch 전부가 새 버전을 보고할 때까지 기다린다. 설치에 실패한 장치(state=fault + ota_error)가 보이면 바로 멈춘다.
+        돌려주는 것: (걸린 초 또는 None(시간 초과), 실패 장치 목록)"""
+        start = time.monotonic()
+        while True:
+            snap = self.w.snapshot(batch)
+            failed = [d for d in batch if snap.get(d, {}).get("state") == "fault" and snap.get(d, {}).get("ota_error")]
+            if failed:
+                return None, failed
+            if all(snap.get(d, {}).get("fw") == self.version for d in batch):
+                return time.monotonic() - start, []
+            if time.monotonic() - start >= self.apply_timeout_s:
+                return None, []
+            time.sleep(0.2)
 
     def rollback(self):
         """새 버전을 받은 모든 장치를 이전 버전으로. 걸린 시간을 rollback_s 에 남긴다"""
@@ -187,17 +258,7 @@ class Rollout:
             self.mark(f"롤백 완료: {len(self.updated)}대 복구, {self.rollback_s}초")
 
 
-# wait_until 에 넘길 "조건 함수"를 만들어 주는 함수들 (람다 대신 이름 있는 함수로 — 읽기 쉽게)
-def make_all_applied_check(rollout, batch):
-    def all_applied():
-        snap = rollout.w.snapshot(batch)
-        for device_id in batch:
-            if snap.get(device_id, {}).get("fw") != rollout.version:
-                return False
-        return True
-    return all_applied
-
-
+# wait_until 에 넘길 "조건 함수"를 만들어 주는 함수 (람다 대신 이름 있는 함수로 — 읽기 쉽게)
 def make_all_restored_check(rollout):
     def all_restored():
         snap = rollout.w.snapshot(rollout.updated)
@@ -250,8 +311,10 @@ class DbLog:
         self.conn.close()
 
 
-def run_rollout(version, stages, apply_s, health_wait, max_fail, bad, discover_s, broker, port, db, out):
-    """배포 한 번. 결과 dict 를 돌려준다 (장애 주입 스크립트도 이 함수를 부른다). 장치가 없으면 None"""
+def run_rollout(version, stages, apply_s, health_wait, max_fail, bad, discover_s, broker, port, db, out,
+                manifest=None, apply_timeout_s=None):
+    """배포 한 번. 결과 dict 를 돌려준다 (장애 주입 스크립트도 이 함수를 부른다). 장치가 없으면 None
+    manifest 가 있으면 진짜 산출물 배포(url/sha256/size 를 장치에 보낸다), 없으면 버전 문자열만 바꾸는 흉내 배포"""
     w = FleetWatcher(broker, port)
     print(f"장치 찾는 중 ({discover_s:.0f}초) ...")
     time.sleep(discover_s)
@@ -263,7 +326,14 @@ def run_rollout(version, stages, apply_s, health_wait, max_fail, bad, discover_s
 
     db_log = DbLog.try_open(db, version)
     started_at = datetime.now(timezone.utc)
-    r = Rollout(w, version, stages, apply_s, health_wait, max_fail, bad, db_log)
+    r = Rollout(w, version, stages, apply_s, health_wait, max_fail, bad, db_log, manifest=manifest,
+                apply_timeout_s=apply_timeout_s)
+    kinds = w.snapshot(devices)
+    real = [d for d in devices if kinds.get(d, {}).get("kind") == "real"]
+    if manifest is not None:
+        r.mark(f"산출물 {manifest['url']} (sha256 {str(manifest.get('sha256', ''))[:12]}…, {manifest.get('size')} bytes)")
+    if real:
+        r.mark(f"실물 장치 {len(real)}대는 마지막 순서: {real}")
     success = r.run(devices)
     finished_at = datetime.now(timezone.utc)
     w.close()
@@ -273,7 +343,13 @@ def run_rollout(version, stages, apply_s, health_wait, max_fail, bad, discover_s
         "updated_devices": len(r.updated), "success": success, "rollback_s": r.rollback_s,
         "apply_s": apply_s, "health_wait_s": health_wait, "timeline": r.timeline,
         "started_at": started_at.isoformat(), "finished_at": finished_at.isoformat(),
+        "mode": "artifact" if manifest is not None else "simulated",
+        "real_devices": real,
+        "total_s": round((finished_at - started_at).total_seconds(), 2),
     }
+    if manifest is not None:
+        result["manifest"] = {"source": manifest.get("manifest_source"), "url": manifest.get("url"),
+                              "sha256": manifest.get("sha256"), "size": manifest.get("size"), "commit": manifest.get("commit")}
     if db_log is not None:
         db_log.summary(result, started_at, finished_at)
         db_log.close()
@@ -287,25 +363,40 @@ def run_rollout(version, stages, apply_s, health_wait, max_fail, bad, discover_s
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--version", required=True)
-    ap.add_argument("--stages", default="5,50,100", help="누적 퍼센트, 쉼표 구분")
-    ap.add_argument("--apply-s", type=float, default=2.0, help="장치가 적용에 쓰는 시간(초, 시뮬)")
-    ap.add_argument("--health-wait", type=float, default=5.0, help="단계마다 헬스를 지켜보는 시간(초)")
-    ap.add_argument("--max-fail", type=int, default=0, help="허용하는 비정상 장치 수")
-    ap.add_argument("--bad", action="store_true", help="나쁜 펌웨어 시뮬레이션 (적용 뒤 fault)")
+    ap.add_argument("--version", default="", help="흉내 배포의 버전 문자열. --manifest 가 있으면 매니페스트의 version 을 쓴다")
+    ap.add_argument("--manifest", default="", help="manifest.json 경로 또는 URL — 진짜 산출물 배포")
+    ap.add_argument("--stages", default="", help="누적 퍼센트, 쉼표 구분 (기본: 매니페스트 또는 5,50,100)")
+    ap.add_argument("--apply-s", type=float, default=2.0, help="장치가 적용에 쓰는 시간(초, 흉내 배포에서만)")
+    ap.add_argument("--health-wait", type=float, default=None, help="단계마다 헬스를 지켜보는 시간(초, 기본 매니페스트 또는 5)")
+    ap.add_argument("--max-fail", type=int, default=None, help="허용하는 비정상 장치 수 (기본 매니페스트 또는 0)")
+    ap.add_argument("--apply-timeout", type=float, default=None, help="단계 적용 대기 상한(초, 기본 매니페스트 또는 apply_s+15)")
+    ap.add_argument("--bad", action="store_true", help="나쁜 펌웨어 흉내 (적용 뒤 fault). 진짜 배포에서는 --manifest 에 -bad 패키지를 준다")
     ap.add_argument("--discover-s", type=float, default=3.0)
-    ap.add_argument("--broker", default="localhost")
-    ap.add_argument("--port", type=int, default=1883)
+    ap.add_argument("--broker", default=os.environ.get("FLEET_BROKER", "localhost"))
+    ap.add_argument("--port", type=int, default=int(os.environ.get("FLEET_PORT", "1883")))
     ap.add_argument("--db", default="postgresql://fleet:fleet@localhost:5432/fleet")
     ap.add_argument("--out", default="", help="결과 JSON 경로 (기본 docs/measurements/ota_<version>.json)")
     a = ap.parse_args()
 
-    stages = [int(x) for x in a.stages.split(",")]
+    manifest = None
+    policy = {}
+    version = a.version
+    if a.manifest:
+        manifest = load_manifest(a.manifest)
+        policy = manifest.get("rollout", {})
+        if not version:
+            version = str(manifest["version"])
+    if not version:
+        ap.error("--version 또는 --manifest 가 필요합니다")
+    stages = [int(x) for x in a.stages.split(",")] if a.stages else list(policy.get("stages_pct", [5, 50, 100]))
+    health_wait = a.health_wait if a.health_wait is not None else float(policy.get("health_wait_s", 5.0))
+    max_fail = a.max_fail if a.max_fail is not None else int(policy.get("max_fail", 0))
+    apply_timeout = a.apply_timeout if a.apply_timeout is not None else policy.get("apply_timeout_s")
     out = a.out
     if out == "":
-        out = f"docs/measurements/ota_{a.version}.json"
-    result = run_rollout(a.version, stages, a.apply_s, a.health_wait, a.max_fail, a.bad,
-                         a.discover_s, a.broker, a.port, a.db, out)
+        out = f"docs/measurements/ota_{version}.json"
+    result = run_rollout(version, stages, a.apply_s, health_wait, max_fail, a.bad,
+                         a.discover_s, a.broker, a.port, a.db, out, manifest=manifest, apply_timeout_s=apply_timeout)
     if result is None:
         return 2
     if result["success"]:

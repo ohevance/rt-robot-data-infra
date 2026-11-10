@@ -126,6 +126,7 @@ flowchart TD
 | [E11](experiments/E11.md) | QoS 0 이면 수집기 10초 중단에 얼마를 잃나? | 수집기·장치 모두 QoS 0 으로 같은 주입 | **508 / 1312**(예측 500 = 50대 × 10 s) vs QoS 1 지속 세션 0 / 1311 | WSL2 | `fault_collector_qos0.json` | 11/04 소실험 |
 | [E12](experiments/E12.md) | 지속 세션은 무한히 보관하나? | 수집기가 7.5분 비어 있던 사고를 그대로 측정 | 412 s × 50 ≈ 20,600 까지 보관, 그 뒤 **2,450개 버림** = `max_queued_messages 20000`. Mosquitto 는 꽉 차면 새 메시지를 버린다 | WSL2 | LOG | 11/04 D5 2차 |
 | [E13](experiments/E13.md) | 같은 장애 4종이 다른 환경(GitHub 러너, 10대 2 Hz)에서도 같은 모양인가? | CI `fleet_integration` (진짜 컨테이너) | 유실 0/318 · 0/286 · 0/280, 롤백 0.4 s — 환경이 아니라 설계가 만든 숫자 | ubuntu-24.04 러너 | `table3_ci.md` | 11/04 CI 2차 |
+| [E22](experiments/E22.md) | OTA 를 흉내에서 진짜 설치로 바꾸고 태그 → 빌드 → 가상 50대 카나리 → Release 게시를 이으면, 50대에 진짜 산출물이 깔리는 데 몇 초이고 깨진 빌드는 몇 대에서 멈추나? | `scripts/package_release.sh`(tar.gz·sha256·매니페스트) → `rollout.py --manifest` → 장치 `ota_apply.py`(내려받기·sha256·A/B 슬롯·자가 점검·전환) · `release.yml` | 샌드박스(가짜 브로커, 진짜 설치) 50대: 단계 적용 **0.6 / 1.0 / 1.2 s**, 전체 3.95 s; 깨진 패키지 **3/50 에서 거부 → 롤백 0.2 s**. 러너 값은 첫 태그 뒤 | 샌드박스 · GitHub 러너(매 태그) | `ota_release_sandbox_*.json`, Release 자산 | 11/10 |
 
 ## 4. 사고·함정 (실험은 아니지만 "뭐가 안 됐고 어떻게 풀었나"의 소재)
 
@@ -144,5 +145,5 @@ flowchart TD
 | `record.sh` 가 조용히 안 끝남 | `timeout` 이 recorder 를 뒤 프로세스 그룹에 두고, 키보드 읽기에서 SIGTTIN 정지 | `timeout --foreground` + `--disable-keyboard-controls` | 11/05 (E20) |
 
 ## 5. 아직 안 한 것
-- (완료) E19 Pi 4 PREEMPT_RT, E20 기록 파이프라인 첫 실행, E21 ALLEX 48 자유도(WSL 1 kHz · 500 Hz, 러너 1 kHz). E21 남음: 러너 500 Hz 값, 노드 안 `work_us`·drop, 조건별 3회 반복과 10초 측정(테스트에 주기 수 옵션 필요).
+- (완료) E19 Pi 4 PREEMPT_RT, E20 기록 파이프라인 첫 실행, E21 ALLEX 48 자유도(WSL 1 kHz · 500 Hz, 러너 1 kHz), E22 릴리스 → 배포 1차(샌드박스). E22 남음: 첫 태그의 러너 카나리 값, Pi 자율 설치 1회(aarch64 패키지 자가 점검), 헬스 게이트에 RT 지표, 서명. E21 남음: 러너 500 Hz 값, 노드 안 `work_us`·drop, 조건별 3회 반복과 10초 측정(테스트에 주기 수 옵션 필요).
 - 남은 것: 브로커 로그로 천둥 떼(thundering herd) 가설 확정, 수동 ACK(DB 적재 뒤 PUBACK), 중력 보상(토크 피드포워드), 512M 부하로 cyclictest -S 한 번 더(E19-d 의 부하 정의 vs 격리 전후 가르기), 기록 요약을 관제로 1 Hz 올리기 — 면접에서 "다음 단계"로 말할 것.

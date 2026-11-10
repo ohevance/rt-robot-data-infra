@@ -90,7 +90,8 @@ def test_apply_timeout(agents):
     victim = agents[0]
     victim.ota_thread = object()
     result = rollout.run_rollout(version="1.3.0", stages=[5, 100], apply_s=0.05, health_wait=0.1, max_fail=0,
-                                 bad=False, discover_s=0.3, broker="localhost", port=1883, db="", out="")
+                                 bad=False, discover_s=0.3, broker="localhost", port=1883, db="", out="",
+                                 apply_timeout_s=1.0)
     victim.ota_thread = None
     check(result["success"] is False, "적용 시간 초과면 실패")
     check(any("적용 시간 초과" in e["event"] for e in result["timeline"]), "타임라인에 시간 초과가 남는다")
@@ -104,17 +105,7 @@ if __name__ == "__main__":
     try:
         test_good_firmware(agents)
         test_bad_firmware(agents)
-        # 시간 초과 테스트는 apply_s + 15 초를 기다리므로 짧게 바꿔서 돈다
-        original = rollout.wait_until
-
-        def short_wait_until(predicate, timeout_s, poll_s=0.05):
-            if timeout_s > 1.0:
-                timeout_s = 1.0
-            return original(predicate, timeout_s, poll_s)
-
-        rollout.wait_until = short_wait_until
-        test_apply_timeout(agents)
-        rollout.wait_until = original
+        test_apply_timeout(agents)   # 적용 대기 상한을 1초로 줘서 짧게 돈다
     finally:
         stop_fleet(agents)
     if fail_count == 0:

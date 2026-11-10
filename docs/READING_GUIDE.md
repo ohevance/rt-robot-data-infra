@@ -37,6 +37,7 @@ D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24
 | 24 | `rt_control/rt_core/include/rt_core/mujoco_backend.hpp` · `src/mujoco_backend.cpp` | 약 90 / 230 | MuJoCo 를 Backend 로: 모델 로드 → 걸음 맞추기(ceil) → 관절 이름/액추에이터 연결 → 매 주기 ctrl 쓰고 mj_step, qpos/qvel 읽기 | init 에서만 할당하고 RT 에서는 안 하는 경계가 어디인가 · substeps 를 올림(ceil)으로 잡는 이유 · 관절 이름이 틀렸을 때 무엇을 출력하나 |
 | 25 | `rt_control/rt_core/test/test_mujoco_backend.cpp` · `scripts/get_mujoco.sh` · `rt_control_node.cpp` 의 `make_backend()` | 약 130 / 60 / 50 | 물리 모델 위 2000주기 테스트(움직임 + 한 주기 비용 p99) · 설치 · 파라미터로 백엔드 고르기 | 테스트가 p99 < 900 us 를 보는 이유(1 kHz 안에 물리가 들어오나) · 노드가 MuJoCo 없이 빌드됐을 때 어떻게 실패하나(조용히 바꾸지 않는다) |
 | 26 | `data_pipeline/record.sh` · `data_pipeline/bag_to_csv.py` | 약 20 / 230 | rosbag2(MCAP) 기록 → CSV 3개 + 검증 요약(주기·틈·추종 오차) | "로깅"과 "관제"가 왜 다른 길인가 · 추종 오차에서 중력 처짐을 어떻게 읽나 |
+| 27 | `fleet/agent/ota_apply.py` · `fleet/ota/rollout.py`(`--manifest`) · `scripts/package_release.sh` · `.github/workflows/release.yml` · `docs/RELEASE.md` | 약 230 / +80 / 100 / 110 | 릴리스 → 배포: 패키지·매니페스트 → 가상 50대 카나리 → 게시 → 장치의 내려받기·sha256·A/B 슬롯·자가 점검·전환, Pi 자율 업데이트 | 왜 A/B 슬롯인가(전원 차단) · 자가 점검이 헬스 게이트보다 먼저 거부하는 이유 · 왜 러너가 실물에 직접 배포하지 않나 · sha256 과 서명의 차이 |
 
 ## 2. 모든 파일에 던지는 질문 3개
 

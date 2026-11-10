@@ -1,0 +1,125 @@
+# ---------------------------------------------------------------------------
+# release — 태그(v*)를 올리면: 빌드 → 테스트 → 패키지(x86_64 + aarch64) → 가상 함대 50대 카나리 → 통과하면 GitHub Release 게시
+#
+#   왜 태그인가   : "이 커밋을 로봇에 내보낸다"는 결정은 사람이 한다. push 마다 내보내지 않는다. (DECISIONS 11/10)
+#   왜 두 아키텍처: 러너·가상 장치는 x86_64, 실물(Pi 4)은 aarch64. 장치가 manifest.json 에서 자기 항목을 고른다.
+#   왜 카나리 먼저 : 게시된 것은 실물이 스스로 받아 간다(자율 업데이트). 그 전에 가상 50대에서 단계 배포와 깨진 패키지 롤백을 본다.
+#   pre-release   : 태그에 '-' 가 있으면(v0.9.0-rc1) pre-release — 실물의 자율 업데이트는 'latest'(정식) 만 본다.
+#
+#   사람이 하는 것: git tag v1.2.0 && git push origin v1.2.0   (그 다음은 전부 여기서)
+#   결과         : Release 자산 = 패키지 2개 + manifest.json + 카나리 JSON 2개 + 보고서(본문)
+# ---------------------------------------------------------------------------
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ python3
+
+      - name: Build rt_core + unit tests (${{ matrix.arch }})
+        run: |
+          cmake -S rt_control/rt_core -B build/rt_core -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/rt_core -j
+          ctest --test-dir build/rt_core --output-on-failure
+
+      - name: Package (good + deliberately broken for the rollback check)
+        run: |
+          bash scripts/package_release.sh "${{ github.ref_name }}" --arch "${{ matrix.arch }}"
+          bash scripts/package_release.sh "${{ github.ref_name }}" --arch "${{ matrix.arch }}" --bad
+          ls -l build/release
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: pkg-${{ matrix.arch }}
+          path: build/release/
+
+  canary:
+    runs-on: ubuntu-24.04
+    needs: package
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pkg-*
+          path: build/release
+          merge-multiple: true
+
+      - name: Merge per-arch manifests
+        run: |
+          python3 scripts/merge_manifests.py --out build/release/manifest.json build/release/manifest.*.json
+          python3 scripts/merge_manifests.py --out build/release/manifest-bad.json build/release/manifest-bad.*.json
+          cat build/release/manifest.json
+
+      - name: Python deps
+        run: pip install -r fleet/requirements.txt
+
+      - name: Canary — 50 virtual devices, staged rollout of the real package, then the broken one must roll back
+        run: COUNT=50 bash fleet/tests/release_canary.sh
+        timeout-minutes: 15
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: release-canary
+          path: |
+            build/release_canary/*.json
+            build/release_canary/RELEASE_NOTES.md
+            build/release_canary/*.log
+
+  publish:
+    runs-on: ubuntu-24.04
+    needs: canary
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pkg-*
+          path: build/release
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-canary
+          path: build/release_canary
+
+      - name: Merge manifests again; drop the deliberately broken packages (they are for the canary only)
+        run: |
+          python3 scripts/merge_manifests.py --out build/release/manifest.json build/release/manifest.*.json
+          rm -f build/release/*-bad-*.tar.gz build/release/manifest-bad*.json
+          ls -l build/release
+
+      - name: Publish GitHub Release (pre-release when the tag has a '-')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          PRE=""
+          case "$TAG" in *-*) PRE="--prerelease" ;; esac
+          gh release create "$TAG" $PRE --title "rt-robot-data-infra $TAG" --notes-file build/release_canary/RELEASE_NOTES.md \
+            build/release/rt-robot-data-infra-*-x86_64.tar.gz \
+            build/release/rt-robot-data-infra-*-aarch64.tar.gz \
+            build/release/manifest.json \
+            build/release_canary/ota_release_good.json \
+            build/release_canary/ota_release_bad.json
+          echo "published: https://github.com/${{ github.repository }}/releases/tag/$TAG"

@@ -1,0 +1,54 @@
+{
+ "version": "0.9.0-rc1-bad",
+ "bad": false,
+ "stages_pct": [
+  5,
+  50,
+  100
+ ],
+ "devices": 50,
+ "updated_devices": 3,
+ "success": false,
+ "rollback_s": 0.2,
+ "apply_s": 0,
+ "health_wait_s": 0.3,
+ "timeline": [
+  {
+   "t_s": 0.0,
+   "event": "산출물 build/release/rt-robot-data-infra-0.9.0-rc1-bad-x86_64.tar.gz (sha256 9fab4a0e8eea…, 20786 bytes)"
+  },
+  {
+   "t_s": 0.0,
+   "event": "대상 장치 50대, 버전 0.9.0-rc1-bad, 단계 [5, 50, 100]%"
+  },
+  {
+   "t_s": 0.0,
+   "event": "단계 5%: 3대에 ota 전송"
+  },
+  {
+   "t_s": 0.2,
+   "event": "단계 5%: 설치 실패 3대 ['rel-000', 'rel-001', 'rel-002'] — 사유 ['ValueError: selftest 실패 (exit 1): selftest: 고의로 깨진 빌드 (롤백 검증용)'] → 롤백"
+  },
+  {
+   "t_s": 0.2,
+   "event": "롤백: 3대에 ota_rollback 전송"
+  },
+  {
+   "t_s": 0.4,
+   "event": "롤백 완료: 3대 복구, 0.2초"
+  }
+ ],
+ "started_at": "2026-11-10T01:04:33.180130+00:00",
+ "finished_at": "2026-11-10T01:04:33.583250+00:00",
+ "mode": "artifact",
+ "real_devices": [],
+ "total_s": 0.4,
+ "manifest": {
+  "source": "build/release/manifest-bad.json",
+  "url": "build/release/rt-robot-data-infra-0.9.0-rc1-bad-x86_64.tar.gz",
+  "sha256": "9fab4a0e8eeab9c9356bf95ee826e3b193483b15cacf544d7aa36f3dbce8b0da",
+  "size": 20786,
+  "commit": "43105e0bd30ee30f4ed1b202fd2e73c86e8cba5e"
+ },
+ "env": "샌드박스(Linux 컨테이너), 가짜 브로커 fake_mqtt(동기 전달) + 진짜 설치(x86_64 패키지), 2026-11-10"
+}

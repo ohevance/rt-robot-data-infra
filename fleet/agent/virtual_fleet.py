@@ -73,6 +73,8 @@ def main():
     ap.add_argument("--keepalive-jitter", type=int, default=0, help="장치마다 keepalive 에 0~N 초를 더해 박자를 흩뜨린다")
     ap.add_argument("--telemetry-qos", type=int, default=0, choices=[0, 1],
                     help="텔레메트리 QoS. 1 이면 수집기가 잠깐 죽어도(지속 세션) 브로커가 대신 들고 있다")
+    ap.add_argument("--slot-root", default="",
+                    help="주면 장치마다 <slot-root>/<id>/ 에 A/B 슬롯을 두고 ota 명령(url 있음)을 진짜로 설치한다. 비우면 흉내 경로")
     a = ap.parse_args()
 
     lock = single_instance.acquire(f"fleet_{a.prefix}")
@@ -86,8 +88,11 @@ def main():
     for i in range(a.count):
         device_id = f"{a.prefix}-{i + 1:03d}"
         keepalive = a.keepalive + rng.randint(0, a.keepalive_jitter)
+        slot_root = None
+        if a.slot_root:
+            slot_root = os.path.join(a.slot_root, device_id)
         agent = DeviceAgent(device_id, a.broker, a.port, 1.0 / a.rate, VirtualMetrics(seed=i), fw_version="1.0.0",
-                            keepalive_s=keepalive, telemetry_qos=a.telemetry_qos)
+                            keepalive_s=keepalive, telemetry_qos=a.telemetry_qos, slot_root=slot_root)
         agents.append(agent)
 
     stop_flag = {"stop": False}
@@ -102,7 +107,8 @@ def main():
     for agent in agents:
         agent.start()
         time.sleep(0.01)
-    print(f"virtual fleet: {a.count} devices @ {a.rate} Hz -> {a.broker}:{a.port}  keepalive={a.keepalive}s(+0~{a.keepalive_jitter}) qos={a.telemetry_qos}  (Ctrl+C to stop)")
+    mode = "artifact OTA (slots in %s)" % a.slot_root if a.slot_root else "simulated OTA"
+    print(f"virtual fleet: {a.count} devices @ {a.rate} Hz -> {a.broker}:{a.port}  keepalive={a.keepalive}s(+0~{a.keepalive_jitter}) qos={a.telemetry_qos}  {mode}  (Ctrl+C to stop)")
 
     started = time.monotonic()
     while not stop_flag["stop"]:

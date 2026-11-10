@@ -5,7 +5,9 @@
  [RT 노드 다리: ros_status_bridge.py] ─┼─MQTT (fleet/<id>/telemetry, 1 Hz)──▶ [Mosquitto] ──▶ [collector.py: 1초 묶음 COPY] ──▶ [TimescaleDB] ──▶ [Grafana :3000]
  [실물 Pi (나중에)]                   ┘        ▲                                   │  DB 죽으면 backlog 에 보관        └─ collector_stats (초당 메시지·적재 시간·전달 지연·backlog)
                                  끊기면 버퍼 ──┘ 재접속 시 QoS 1 재전송             │
- [ota/rollout.py] ──fleet/<id>/cmd {ota | ota_rollback}──▶ 장치 (5% → 50% → 100%, 헬스 게이트, 자동 롤백)
+ [ota/rollout.py] ──fleet/<id>/cmd {ota(+url,sha256) | ota_rollback}──▶ 장치 (5% → 50% → 100%, 헬스 게이트, 자동 롤백; 실물은 마지막)
+                                                            장치: 내려받기 → sha256 → A/B 슬롯 → 자가 점검 → current 전환 (agent/ota_apply.py)
+ [GitHub Release: manifest.json + tar.gz] ◀── release.yml (태그 → 빌드 → 가상 50대 카나리 → 게시)   Pi: pi_agent.py --auto-update 가 스스로 받는다
  [chaos/inject.py] ── docker stop mqtt / db · 수집기 kill · 나쁜 펌웨어 ──▶ 감지·복구·유실을 숫자로 (표③-2)
 ```
 
@@ -27,6 +29,7 @@
 ```bash
 python3 fleet/tests/test_fleet_logic.py            # 파싱·버퍼·명령·OTA·유언 → "OK: fleet logic"
 python3 fleet/tests/test_ota_rollout.py            # 가상 20대 위에서 정상 배포 / 나쁜 펌웨어 롤백 / 적용 시간 초과 → "OK: ota rollout"
+python3 fleet/tests/test_ota_artifact.py           # 진짜 설치(로컬 HTTP + tar.gz): sha 불일치·자가 점검 실패·롤백·함대 20대·자율 업데이트·아키텍처·훅 → "OK: ota artifact"
 python3 fleet/tests/test_collector_resilience.py   # DB 죽음→backlog→복귀, 상한, 지속 세션 옵션 → "OK: collector resilience"
 ```
 
@@ -66,10 +69,15 @@ Grafana 에 50대가 올라오고 초당 메시지 50 이 보이면 성공. 300�
 
 ## 5. OTA 단계 배포 (터미널 4)
 ```bash
-python3 fleet/ota/rollout.py --version 1.1.0              # 정상: 5% → 50% → 100%, 각 단계 헬스 5초 관찰. 약 30초
-python3 fleet/ota/rollout.py --version 1.2.0-bad --bad    # 나쁜 펌웨어: 5%(3대)에서 fault → 롤백. 롤백 시간이 찍힌다
+python3 fleet/ota/rollout.py --version 1.1.0              # 흉내(버전 문자열만): 5% → 50% → 100%, 각 단계 헬스 5초 관찰. 약 30초
+python3 fleet/ota/rollout.py --version 1.2.0-bad --bad    # 나쁜 펌웨어 흉내: 5%(3대)에서 fault → 롤백. 롤백 시간이 찍힌다
+# 진짜 산출물(11/10 —): 가상 장치를 --slot-root 로 띄웠을 때. 패키지는 scripts/package_release.sh (docs/RELEASE.md 5절)
+python3 fleet/ota/rollout.py --manifest build/release/manifest.json          # 로컬 파일. 장치가 내려받기·sha256·A/B 슬롯·자가 점검·전환
+python3 fleet/ota/rollout.py --manifest https://github.com/<owner>/<repo>/releases/download/v1.2.0/manifest.json   # 게시된 릴리스
+python3 fleet/ota/rollout.py --manifest build/release/manifest-bad.json      # 자가 점검이 실패하는 패키지 → 첫 단계에서 거부·롤백
 ```
 결과 JSON `docs/measurements/ota_<version>.json`, DB `ota_rollouts` 표, 이벤트 `events(kind='ota')`. Grafana 장치 표에서 fw_version 이 바뀌는 것이 보인다.
+가상 장치를 진짜 설치 경로로 띄우려면 `python3 fleet/agent/virtual_fleet.py --count 50 --slot-root build/devices`(장치마다 폴더). 실물 Pi 는 `fleet/agent/pi_agent.py`(`docs/RELEASE.md` 5절).
 
 ## 6. 장애 주입 4종 (터미널 4) — 표③-2
 ```bash

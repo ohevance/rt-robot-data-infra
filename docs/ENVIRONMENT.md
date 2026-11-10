@@ -129,8 +129,9 @@ flowchart LR
   subgraph R2["잡 fleet_integration (러너 VM 2, 약 2분)"]
     direction TB
     b1["pip install"] --> b2["docker compose up mqtt db → migrate.py --wait 120"]
-    b2 --> b3["수집기(QoS 1) + 가상 장치 10대 2 Hz"] --> b4["장애 주입 broker·db·collector 5초 + 나쁜 펌웨어 + 정상 OTA"]
-    b4 --> b5["assert_results.py: 유실 0 · 복구됨 · 롤백됨"] --> b6["table3_ci.md → 아티팩트 fleet-integration"]
+    b2 --> b3["수집기(QoS 1) + 가상 장치 10대 2 Hz (A/B 슬롯)"] --> b4["장애 주입 broker·db·collector 5초 + 나쁜 펌웨어 + 정상 OTA(흉내)"]
+    b4 --> b4b["산출물 OTA: 패키지(jitter_bench) 로컬 HTTP → 내려받기·sha256·A/B·자가 점검 → 정상 10/10, 깨진 패키지 1/10 거부·롤백"]
+    b4b --> b5["assert_results.py: 유실 0 · 복구됨 · 롤백됨 · 산출물 설치됨/거부됨"] --> b6["table3_ci.md → 아티팩트 fleet-integration"]
   end
   subgraph R3["잡 mujoco (러너 VM 3, 약 45초)"]
     direction TB
@@ -169,6 +170,32 @@ flowchart LR
 | 11/05 | 수집기 `request_stop` 함수 삭제(`NameError`) — 수집기가 시작 직후 죽음 | 단위 테스트가 `main()` 을 안 탔고, WSL 에서 수집기를 다시 띄운 적이 없었다 | `LOG.md` 11/05, `test_collector_resilience` 에 main() 스모크 추가 |
 
 배운 규칙: **문서 커밋이라도 push 뒤 `gh run list -L 1` 을 본다.** 11/05 에 측정·문서 push 를 연달아 하며 CI 를 안 봐서 빨간 상태로 몇 시간이 갔다.
+
+### 5-5b. 두 번째 워크플로 — `release.yml` (태그 → 게시), 11/10
+`ci.yml` 이 "이 커밋이 멀쩡한가"를 묻는다면, `release.yml` 은 "이 커밋을 로봇에 내보내도 되나"를 묻는다. `v*` 태그를 push 할 때만 돈다.
+
+```mermaid
+flowchart LR
+  T["git tag v1.2.0 && git push --tags"] --> P1 & P2
+  subgraph P1["package x86_64 (ubuntu-24.04)"]
+    direction TB
+    p1["빌드 · ctest"] --> p2["package_release.sh → tar.gz + sha256 + manifest.x86_64.json (+ 깨진 패키지)"]
+  end
+  subgraph P2["package aarch64 (ubuntu-24.04-arm)"]
+    direction TB
+    q1["빌드 · ctest"] --> q2["같은 것, aarch64 (Pi 용)"]
+  end
+  P1 & P2 --> C
+  subgraph C["canary (ubuntu-24.04)"]
+    direction TB
+    c1["merge_manifests.py → manifest.json"] --> c2["Mosquitto + 가상 50대(A/B 슬롯) + 로컬 HTTP"]
+    c2 --> c3["정상 패키지 5% → 50% → 100% (단계별 적용 시간 기록)"] --> c4["깨진 패키지: 첫 단계 3대에서 자가 점검 거부 → 롤백"]
+    c4 --> c5["assert_results.py + RELEASE_NOTES.md"]
+  end
+  C --> U["publish: gh release create — tar.gz 2개 · manifest.json · 카나리 JSON 2개 · 보고서 (태그에 '-' 있으면 pre-release)"]
+```
+- 러너는 LAN 의 실물에 직접 배포하지 않는다. 게시된 Release 를 운영자가 `rollout.py --manifest <URL>` 로 밀어 넣거나(승인), 실물 Pi 가 `releases/latest` 를 스스로 읽는다(자율). 왜 그런지는 `docs/RELEASE.md` 4절, `docs/DECISIONS.md` 11/10.
+- 러너 종류: x86_64 는 `ubuntu-24.04`, aarch64 는 GitHub 의 Linux arm64 호스팅 러너 `ubuntu-24.04-arm`(공개 저장소 무료). 둘 다 네이티브 빌드라 교차 컴파일 설정이 없다.
 
 ### 5-6. Jenkins 에 익숙한 사람을 위한 대응표
 | Jenkins | GitHub Actions | 이 저장소 |

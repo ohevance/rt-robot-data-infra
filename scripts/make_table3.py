@@ -141,16 +141,21 @@ def section_ota(measure_dir):
     if len(runs) == 0:
         return []
     lines = ["", "### 표③-3 OTA 단계 배포 (5% → 50% → 100%, 헬스 게이트)", ""]
-    lines.append("| 버전 | 장치 | 나쁜 펌웨어? | 결과 | 새 버전 닿은 장치 | 롤백 시간 | 적용/헬스 대기(초) |")
-    lines.append("|---|---:|---|---|---:|---:|---|")
+    lines.append("| 버전 | 방식 | 장치 | 나쁜 펌웨어? | 결과 | 새 버전 닿은 장치 | 롤백 시간 | 전체 시간 | 적용/헬스 대기(초) |")
+    lines.append("|---|---|---:|---|---|---:|---:|---:|---|")
     for r in runs:
         result = "성공 (100%)"
         if not r.get("success"):
             result = "롤백"
-        lines.append(f"| {r['version']} | {r['devices']} | {'예' if r.get('bad') else '아니오'} | {result} | "
-                     f"{r['updated_devices']}/{r['devices']} | {sec(r.get('rollback_s'))} | {f(r.get('apply_s'))} / {f(r.get('health_wait_s'))} |")
+        bad = r.get("bad") or str(r.get("version", "")).endswith("-bad")
+        mode = "산출물(내려받기·sha256·A/B)" if r.get("mode") == "artifact" else "흉내(버전 문자열)"
+        lines.append(f"| {r['version']} | {mode} | {r['devices']} | {'예' if bad else '아니오'} | {result} | "
+                     f"{r['updated_devices']}/{r['devices']} | {sec(r.get('rollback_s'))} | {sec(r.get('total_s'))} | "
+                     f"{f(r.get('apply_s'))} / {f(r.get('health_wait_s'))} |")
     lines.append("")
     lines.append("- 나쁜 펌웨어는 5% 단계에서 fault 가 보여 롤백 → 나머지 95% 는 건드리지도 않는다. 롤백 시간 = 롤백 결정 → 닿은 장치 전부 이전 버전·ok.")
+    lines.append("- 방식 '산출물' 은 11/10 부터: 장치가 tar.gz 를 내려받아 sha256 검증 → A/B 슬롯 → 자가 점검 → 전환까지 진짜로 한다 (docs/RELEASE.md). "
+                 "나쁜 산출물은 자가 점검에서 거부되어 헬스 게이트 전에 '설치 실패'로 롤백된다.")
     return lines
 
 

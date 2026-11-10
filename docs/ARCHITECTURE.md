@@ -138,4 +138,6 @@
 ```
  push ──▶ [rt_core] 빌드·ctest 4·jitter 2초 드롭 0·fleet 가짜 테스트 3·대시보드 JSON ──┬──▶ [fleet_integration] 진짜 mqtt/db 컨테이너 + 장애 3종 + 롤백 + OTA → 판정
                                                                               └──▶ [mujoco] MuJoCo 3.x 내려받아 빌드 → SO-ARM100(6 자유도) 1 kHz 2000주기 → ALLEX(48 자유도, 위로보틱스 공개 모델) 500 Hz 1000주기
+  git tag v* ──▶ [release.yml] package x86_64 + aarch64 (tar.gz · sha256 · manifest) ──▶ canary: 가상 50대 단계 배포 + 깨진 패키지 롤백 ──▶ GitHub Release 게시
+                 장치(Pi · 가상)는 manifest.json 을 보고 내려받기 → sha256 → A/B 슬롯 → 자가 점검 → 전환 (docs/RELEASE.md)
 ```
