@@ -39,6 +39,9 @@ from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+import mqtt_conn  # noqa: E402  (TLS·인증: 환경변수 FLEET_TLS_CA / FLEET_USER / FLEET_PASS)
+
 
 def load_manifest(path_or_url):
     """manifest.json 을 읽고 url 을 절대 주소로 만든다 (상대 경로면 매니페스트와 같은 폴더 기준)"""
@@ -73,6 +76,7 @@ class FleetWatcher:
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="ota-rollout", protocol=mqtt.MQTTv311)
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
+        mqtt_conn.apply_security(self.client)
         self.client.connect(broker, port, keepalive=10)
         self.client.loop_start()
 
@@ -372,12 +376,13 @@ def main():
     ap.add_argument("--apply-timeout", type=float, default=None, help="단계 적용 대기 상한(초, 기본 매니페스트 또는 apply_s+15)")
     ap.add_argument("--bad", action="store_true", help="나쁜 펌웨어 흉내 (적용 뒤 fault). 진짜 배포에서는 --manifest 에 -bad 패키지를 준다")
     ap.add_argument("--discover-s", type=float, default=3.0)
-    ap.add_argument("--broker", default=os.environ.get("FLEET_BROKER", "localhost"))
-    ap.add_argument("--port", type=int, default=int(os.environ.get("FLEET_PORT", "1883")))
-    ap.add_argument("--db", default="postgresql://fleet:fleet@localhost:5432/fleet")
+    ap.add_argument("--broker", default=None, help="기본: 환경변수 FLEET_BROKER 또는 localhost")
+    ap.add_argument("--port", type=int, default=None, help="기본: 환경변수 FLEET_PORT, TLS 면 8883, 아니면 1883")
+    ap.add_argument("--db", default=os.environ.get("DB_DSN", "postgresql://fleet:fleet@localhost:5432/fleet"))
     ap.add_argument("--out", default="", help="결과 JSON 경로 (기본 docs/measurements/ota_<version>.json)")
     a = ap.parse_args()
 
+    a.broker, a.port = mqtt_conn.broker_defaults(a.broker, a.port)
     manifest = None
     policy = {}
     version = a.version

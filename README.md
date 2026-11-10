@@ -52,6 +52,7 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 - `fleet` — Mosquitto·TimescaleDB·Grafana(docker-compose), 장치 에이전트(버퍼·재전송·유언·**OTA 진짜 설치**: 내려받기·sha256·A/B 슬롯·자가 점검·롤백, **자율 업데이트**), 실물 보드 에이전트 `pi_agent.py`, 가상 장치 N대, RT 노드 다리, 수집기(1초 묶음 COPY + 통계 + **DB 끊김 backlog** + **지속 세션 옵션**), **OTA 단계 배포기**, **장애 주입 4종 + 판정**, 진단 도구, DB 마이그레이션, 대시보드 생성기(14 패널), 단위 테스트 3개(가짜 브로커·DB) + 통합 테스트 스크립트
 - `scripts/` — `cyclictest_run.sh` · **`jitter_run.sh`**(표① 측정 한 줄, 온도·스로틀 기록), `make_table1/2/3.py`(표), `profile_to_params.py`(로봇 프로필 → ROS 파라미터, 백엔드 선택), **`get_mujoco.sh`**(MuJoCo + Menagerie 모델), **`package_release.sh`**(릴리스 패키지·sha256·매니페스트) · `merge_manifests.py` · `make_release_report.py`
 - `.github/workflows/ci.yml` — 3잡: 빌드·단위 테스트·1 kHz 연기 테스트 → 진짜 컨테이너 통합(장애 3종 + OTA 흉내 + **산출물 OTA 정상·깨진 패키지**) · MuJoCo 헤드리스 2모델
+- `deploy/` — 운영 층을 클라우드 VM 에(`deploy/ec2/`: 설치 스크립트·자체 CA·보안 그룹 안내, 8883 TLS + 비밀번호) · Pi 서비스 등록(`deploy/pi/`)
 - `.github/workflows/release.yml` — **태그 → 패키지(x86_64·aarch64) → 가상 50대 카나리 → GitHub Release 게시** — `docs/RELEASE.md`
 - `data_pipeline/` — 로봇 안 고주기 데이터 기록(rosbag2 MCAP) → CSV → 검증 요약(주기·틈·추종 오차)
 - `robots/` — 로봇 프로필(SO-101 6 자유도 · **ALLEX 48 자유도**, 위로보틱스 공개 모델 `scripts/get_allex.sh`) · `backends/mujoco/README.md` — MuJoCo 설치·실행, ALLEX 는 §6

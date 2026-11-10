@@ -30,7 +30,9 @@ from collections import deque
 import paho.mqtt.client as mqtt
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
 import ota_apply  # noqa: E402
+import mqtt_conn  # noqa: E402  (TLS·인증은 환경변수 FLEET_TLS_CA / FLEET_USER / FLEET_PASS — 없으면 개발 모드)
 
 MAX_BUFFER = 3600  # 끊겼을 때 모아 두는 최대 개수 (1 Hz 기준 1시간). 넘치면 가장 오래된 것을 버린다
 
@@ -80,6 +82,7 @@ class DeviceAgent:
         self.client.on_disconnect = self.on_disconnect
         self.client.on_message = self.on_message
         self.client.reconnect_delay_set(min_delay=1, max_delay=5)  # 끊기면 1~5초 간격으로 자동 재접속
+        self.security = mqtt_conn.apply_security(self.client)      # 환경변수에 TLS·인증이 있으면 건다 (클라우드 브로커용)
         self.broker_host = broker_host
         self.broker_port = broker_port
 

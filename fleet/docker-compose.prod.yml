@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------------------
+# 운영 덮어쓰기 — 클라우드 VM 에서 docker-compose.yml 위에 겹쳐 쓴다 (deploy/ec2/setup.sh 가 쓴다):
+#   docker compose -f fleet/docker-compose.yml -f fleet/docker-compose.prod.yml up -d --build
+#
+# 바뀌는 것
+#   mqtt     : 8883(TLS + 비밀번호)만 밖으로. 1883 은 도커 네트워크 안에서만. 인증서·비밀번호 파일은 저장소에 없다(.gitignore)
+#   db       : 포트를 밖으로 내지 않는다 (수집기·Grafana 는 같은 네트워크에서 붙는다). 비밀번호 fleet 는 그래서 그대로 둔다
+#   grafana  : 익명 보기 끔, 관리자 비밀번호는 fleet/.env 의 GRAFANA_ADMIN_PASSWORD
+#   collector: 항상 뜬다(프로필 해제), QoS 1(지속 세션), 내부 1883
+#   전부 restart: unless-stopped — VM 이 재부팅돼도 올라온다
+# 비밀값은 fleet/.env (gitignore) 에만. 저장소에 넣지 않는다.
+# ---------------------------------------------------------------------------
+services:
+  mqtt:
+    ports: !override
+      - "8883:8883"
+    volumes: !override
+      - ./mosquitto/mosquitto-prod.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/passwd:/mosquitto/config/passwd:ro
+      - ./mosquitto/certs:/mosquitto/certs:ro
+      - fleet_mqtt_data:/mosquitto/data
+    restart: unless-stopped
+
+  db:
+    ports: !override []
+    restart: unless-stopped
+
+  grafana:
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?fleet/.env 에 GRAFANA_ADMIN_PASSWORD 를 두세요}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    restart: unless-stopped
+
+  collector:
+    profiles: !override []
+    environment:
+      BROKER: mqtt
+      DB_DSN: postgresql://fleet:fleet@db:5432/fleet
+      COLLECTOR_QOS: "1"
+    restart: unless-stopped

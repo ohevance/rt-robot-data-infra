@@ -9,3 +9,10 @@ third_party/
 .DS_Store
 install/
 log/
+
+# 운영 브로커의 비밀값 (deploy/ec2/setup.sh 가 만든다) — 절대 커밋하지 않는다
+fleet/mosquitto/certs/
+fleet/mosquitto/passwd
+fleet/.env
+*.key
+fleet-server-info.txt

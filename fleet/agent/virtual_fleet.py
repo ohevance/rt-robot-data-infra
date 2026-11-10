@@ -25,6 +25,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
 from device_agent import DeviceAgent  # noqa: E402
+import mqtt_conn  # noqa: E402
 import single_instance  # noqa: E402
 
 
@@ -65,8 +66,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--count", type=int, default=50)
     ap.add_argument("--rate", type=float, default=1.0, help="장치당 초당 메시지 수")
-    ap.add_argument("--broker", default="localhost")
-    ap.add_argument("--port", type=int, default=1883)
+    ap.add_argument("--broker", default=None, help="기본: 환경변수 FLEET_BROKER 또는 localhost")
+    ap.add_argument("--port", type=int, default=None, help="기본: 환경변수 FLEET_PORT, TLS 면 8883, 아니면 1883")
     ap.add_argument("--duration", type=float, default=0, help="초. 0 이면 Ctrl+C 까지")
     ap.add_argument("--prefix", default="vdev")
     ap.add_argument("--keepalive", type=int, default=10, help="MQTT keepalive 초 (실측: 지연 튐 주기가 이 값을 따라간다)")
@@ -83,6 +84,7 @@ def main():
               f"두 벌이 뜨면 같은 client_id 를 서로 밀어냅니다 → 먼저 그쪽을 Ctrl+C 로 끝내세요.")
         return 3
 
+    a.broker, a.port = mqtt_conn.broker_defaults(a.broker, a.port)
     rng = random.Random(0)   # 재현 가능한 jitter (장치 i 는 항상 같은 값)
     agents = []
     for i in range(a.count):
@@ -108,7 +110,7 @@ def main():
         agent.start()
         time.sleep(0.01)
     mode = "artifact OTA (slots in %s)" % a.slot_root if a.slot_root else "simulated OTA"
-    print(f"virtual fleet: {a.count} devices @ {a.rate} Hz -> {a.broker}:{a.port}  keepalive={a.keepalive}s(+0~{a.keepalive_jitter}) qos={a.telemetry_qos}  {mode}  (Ctrl+C to stop)")
+    print(f"virtual fleet: {a.count} devices @ {a.rate} Hz -> {mqtt_conn.describe()}  keepalive={a.keepalive}s(+0~{a.keepalive_jitter}) qos={a.telemetry_qos}  {mode}  (Ctrl+C to stop)")
 
     started = time.monotonic()
     while not stop_flag["stop"]:

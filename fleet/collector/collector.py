@@ -50,6 +50,7 @@ from datetime import datetime, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "common"))
 import single_instance  # noqa: E402  (fleet/common/single_instance.py — 수집기·가상 장치 공용 잠금)
+import mqtt_conn  # noqa: E402  (TLS·인증: 환경변수 FLEET_TLS_CA / FLEET_USER / FLEET_PASS)
 
 import paho.mqtt.client as mqtt
 
@@ -137,6 +138,7 @@ class Collector:
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.reconnect_delay_set(min_delay=1, max_delay=5)
+        mqtt_conn.apply_security(self.client)
         self.client.connect(broker_host, broker_port, keepalive=10)
 
     # ---------- 브로커 콜백 ----------
@@ -347,9 +349,9 @@ def shutdown(c):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--broker", default="localhost")
-    ap.add_argument("--port", type=int, default=1883)
-    ap.add_argument("--db", default="postgresql://fleet:fleet@localhost:5432/fleet")
+    ap.add_argument("--broker", default=None, help="기본: 환경변수 FLEET_BROKER 또는 localhost")
+    ap.add_argument("--port", type=int, default=None, help="기본: 환경변수 FLEET_PORT, TLS 면 8883, 아니면 1883")
+    ap.add_argument("--db", default=os.environ.get("DB_DSN", "postgresql://fleet:fleet@localhost:5432/fleet"))
     ap.add_argument("--dry-run", action="store_true", help="DB 없이 통계만 출력")
     ap.add_argument("--interval", type=float, default=1.0, help="적재 주기(초)")
     ap.add_argument("--qos", type=int, default=0, choices=[0, 1], help="텔레메트리 구독 QoS. 1 = 지속 세션(수집기 끊김 시 유실 0)")
@@ -358,6 +360,8 @@ def main():
     lock_file = acquire_single_instance_lock()
     if lock_file is None:
         return 3
+    a.broker, a.port = mqtt_conn.broker_defaults(a.broker, a.port)
+    print(f"collector: broker {mqtt_conn.describe()}")
     c = Collector(a.broker, a.port, a.db, a.dry_run, qos=a.qos)
     if not a.dry_run:
         try:

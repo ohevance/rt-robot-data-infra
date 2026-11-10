@@ -16,7 +16,8 @@
   python3 fleet/agent/pi_agent.py --device-id pi-rt --broker <브로커 호스트> \\
       --slot-root ~/rt-slots --auto-update https://github.com/<owner>/<repo>/releases/latest/download/manifest.json \\
       --poll-s 600 --window 3-5
-브로커 주소는 환경변수 FLEET_BROKER / FLEET_PORT 로도 준다 (EC2 로 옮길 때 설정만 바꾸기 위해).
+브로커 주소·TLS·인증은 환경변수로: FLEET_BROKER / FLEET_PORT / FLEET_TLS_CA / FLEET_USER / FLEET_PASS (fleet/common/mqtt_conn.py).
+클라우드 브로커(EC2)로 옮길 때 코드가 아니라 이 값만 바뀐다 — deploy/ec2/README.md, deploy/pi/.
 
 읽는 순서: BoardMetrics → parse_window → main
 """
@@ -26,7 +27,9 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
 from device_agent import DeviceAgent  # noqa: E402
+import mqtt_conn  # noqa: E402
 
 
 class BoardMetrics:
@@ -108,8 +111,8 @@ def parse_window(text):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--device-id", default="pi-rt")
-    ap.add_argument("--broker", default=os.environ.get("FLEET_BROKER", "localhost"))
-    ap.add_argument("--port", type=int, default=int(os.environ.get("FLEET_PORT", "1883")))
+    ap.add_argument("--broker", default=None, help="기본: 환경변수 FLEET_BROKER 또는 localhost")
+    ap.add_argument("--port", type=int, default=None, help="기본: 환경변수 FLEET_PORT, TLS(FLEET_TLS_CA) 면 8883, 아니면 1883")
     ap.add_argument("--rate", type=float, default=1.0)
     ap.add_argument("--telemetry-qos", type=int, default=1, choices=[0, 1])
     ap.add_argument("--fw-version", default="", help="비우면 슬롯의 현재 버전, 슬롯이 비었으면 0.0.0-none")
@@ -120,6 +123,7 @@ def main():
     ap.add_argument("--once", action="store_true", help="자율 업데이트를 한 번만 확인하고 끝낸다 (테스트·cron 용)")
     a = ap.parse_args()
 
+    a.broker, a.port = mqtt_conn.broker_defaults(a.broker, a.port)
     slot_root = os.path.expanduser(a.slot_root)
     fw = a.fw_version or "0.0.0-none"
     agent = DeviceAgent(a.device_id, a.broker, a.port, 1.0 / a.rate, BoardMetrics(), fw_version=fw,
@@ -137,7 +141,7 @@ def main():
     agent.start()
     if a.auto_update:
         agent.enable_auto_update(a.auto_update, a.poll_s, parse_window(a.window))
-    print(f"pi agent: {a.device_id} fw={agent.fw_version} -> {a.broker}:{a.port} @ {a.rate} Hz  slots={slot_root}  "
+    print(f"pi agent: {a.device_id} fw={agent.fw_version} -> {mqtt_conn.describe()} @ {a.rate} Hz  slots={slot_root}  "
           f"auto-update={'on (' + str(int(a.poll_s)) + 's' + (', ' + a.window if a.window else '') + ')' if a.auto_update else 'off'}  (Ctrl+C to stop)")
     try:
         while True:

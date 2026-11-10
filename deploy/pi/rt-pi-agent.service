@@ -1,0 +1,16 @@
+# 실물 보드 에이전트 — 사용자 systemd 서비스. 설치: bash deploy/pi/install.sh (이 파일을 ~/.config/systemd/user/ 로 복사한다)
+# 로그: journalctl --user -u rt-pi-agent -f
+[Unit]
+Description=rt-robot-data-infra device agent (telemetry + autonomous OTA)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/rt-robot-data-infra
+EnvironmentFile=%h/.config/rt-fleet/fleet.env
+ExecStart=/usr/bin/python3 fleet/agent/pi_agent.py --device-id pi-rt --slot-root %h/rt-slots --auto-update ${MANIFEST_URL} --poll-s ${POLL_S} --window ${WINDOW}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

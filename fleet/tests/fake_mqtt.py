@@ -145,6 +145,15 @@ class FakeClient:
     def will_set(self, topic, payload=None, qos=0, retain=False):
         self.will = (topic, payload, qos, retain)
 
+    def tls_set(self, ca_certs=None, **kwargs):      # 보안 설정은 가짜 브로커에서는 아무것도 안 한다 (mqtt_conn.apply_security 호환)
+        self.tls = ca_certs
+
+    def tls_insecure_set(self, value):
+        pass
+
+    def username_pw_set(self, username, password=None):
+        self.username = username
+
     def reconnect_delay_set(self, min_delay=1, max_delay=5):
         pass
 

@@ -20,7 +20,9 @@ from rclpy.node import Node
 from std_msgs.msg import String
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
 from device_agent import DeviceAgent  # noqa: E402
+import mqtt_conn  # noqa: E402
 
 
 class StatusBridge(Node):
@@ -71,8 +73,8 @@ class StatusBridge(Node):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--device-id", default="rt-node-1")
-    ap.add_argument("--broker", default="localhost")
-    ap.add_argument("--port", type=int, default=1883)
+    ap.add_argument("--broker", default=None, help="기본: 환경변수 FLEET_BROKER 또는 localhost")
+    ap.add_argument("--port", type=int, default=None, help="기본: 환경변수 FLEET_PORT, TLS 면 8883, 아니면 1883")
     ap.add_argument("--rate", type=float, default=1.0)
     ap.add_argument("--slot-root", default="", help="A/B 슬롯 디렉터리 (예: ~/rt-slots). 주면 ota 명령을 진짜로 설치한다")
     ap.add_argument("--auto-update", default="", help="매니페스트 URL. 주면 지휘소 없이 스스로 새 버전을 받는다 (Release 의 manifest.json)")
@@ -80,6 +82,7 @@ def main():
     ap.add_argument("--window", default="", help="자율 업데이트 허용 시간대 'H0-H1' (예: 3-5). 비우면 항상")
     a = ap.parse_args()
 
+    a.broker, a.port = mqtt_conn.broker_defaults(a.broker, a.port)
     rclpy.init()
     bridge = StatusBridge()
     slot_root = os.path.expanduser(a.slot_root) if a.slot_root else None
