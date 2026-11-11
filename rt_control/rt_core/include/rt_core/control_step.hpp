@@ -67,6 +67,7 @@ class ControlStep : public RtStep {
   ControlCounters& counters_;
 
   std::int64_t last_cmd_ns_ = 0;                  // 마지막 명령을 받은 시각 (0 = 아직 없음)
+  std::uint32_t last_cmd_seq_ = 0;                // 마지막으로 반영한 명령의 번호
   double desired_[kMaxJoints] = {0.0};            // 상위가 원하는 목표 (제한 전)
   double applied_[kMaxJoints] = {0.0};            // 실제로 로봇에 보낸 목표 (제한 후)
   double position_[kMaxJoints] = {0.0};           // 로봇에서 읽은 현재 위치

@@ -141,9 +141,9 @@ flowchart LR
   P["git push"] --> R1
   subgraph R1["잡 rt_core (러너 VM 1, 약 35초)"]
     direction TB
-    a1["apt: cmake g++ python3"] --> a2["cmake 빌드 rt_core"] --> a3["ctest 4: 링 버퍼 · 제어 단계 · 상태 머신 · 1 kHz 2초 드롭 0"]
+    a1["apt: cmake g++ python3 libzmq3-dev python3-zmq"] --> a2["cmake 빌드 rt_core"] --> a3["ctest 6: 링 버퍼 · 제어 단계 · 상태 머신 · 통신 패킷 · 공유 메모리 seqlock · 1 kHz 2초 드롭 0"]
     a3 --> a4["jitter_bench --no-rt 2초 → JSON → make_table1 (표① 생성기 동작 확인)"]
-    a4 --> a5["fleet 단위 테스트 4파일 26건 (가짜 브로커·DB)"] --> a6["대시보드 JSON 생성·파싱"] --> a7["아티팩트 jitter-ci"]
+    a4 --> a5["fleet 단위 테스트 4파일 26건 (가짜 브로커·DB)"] --> a5b["ZeroMQ 노드 빌드 → SDK 형식 4건 → 진짜 노드 끝-대-끝 (11/11)"] --> a6["대시보드 JSON 생성·파싱"] --> a7["아티팩트 jitter-ci"]
   end
   R1 -- needs --> R2
   R1 -- needs --> R3
@@ -240,14 +240,16 @@ flowchart LR
 ### 5-7. 테스트 목록 — "테스트 케이스 등록"은 따로 없다, 전부 저장소의 코드다
 | 묶음 | 파일 | 케이스 | 잡 |
 |---|---|---|---|
-| C++ 단위(ctest) | `rt_control/rt_core/test/test_spsc_ring.cpp` · `test_control_step.cpp` · `test_state_machine.cpp` · jitter_smoke | 4 | rt_core |
+| C++ 단위(ctest) | `rt_control/rt_core/test/test_spsc_ring.cpp` · `test_control_step.cpp` · `test_state_machine.cpp` · `test_wire.cpp` · `test_shm_seqlock.cpp`(11/11) · jitter_smoke | 6 | rt_core |
 | C++ MuJoCo | `test/test_mujoco_backend.cpp` | 1 (2,000주기 + 비용 p99 < 900 us) | mujoco |
 | Python 단위(가짜 브로커·DB) | `fleet/tests/test_fleet_logic.py` · `test_ota_rollout.py` · `test_ota_artifact.py` · `test_collector_resilience.py` | 9(왕복 시간 도구·Nagle 모형·pi_agent SIGTERM 포함) + 3 + 7(상대 경로 슬롯·거부 뒤 롤백 포함 — 함수 7개 안에 확인 11가지) + 7(main 스모크·꺼진 장치 last_seen 포함) = **26** | rt_core |
 | 통합(진짜 컨테이너) | `fleet/tests/integration.sh` + `fleet/chaos/assert_results.py` | 장애 3종 + 나쁜 펌웨어 롤백 + 정상 OTA + 산출물 OTA 둘(4b 정상 10/10 · 4c 깨진 패키지 거부) 판정 | fleet_integration |
+| Python 단위(SDK 패킷, pyzmq 없이) | `sdk/python/tests/test_wire.py` | 4 (C++ 시험과 같은 골든 바이트) | rt_core |
+| 끝-대-끝(진짜 ZeroMQ 노드, 11/11) | `sdk/python/tests/test_zmq_node.py` | 추종 · cmd_seq · 워치독 · 복구 · 나쁜 패킷 넷 · 공유 메모리 · 종료 | rt_core |
 | 릴리스 카나리(진짜 브로커, 태그 때만) | `fleet/tests/release_canary.sh` + 같은 `assert_results.py` | 가상 50대 단계 배포 + 깨진 패키지 롤백 | `release.yml` 의 canary |
 | 연기(smoke) | `jitter_bench --no-rt 2초`, 대시보드 JSON | 2 | rt_core |
 
-**세는 법(11/11 에 정함)**: "테스트 N건"은 **테스트 함수의 수**다 — C++ 는 `ctest` 에 등록된 것 5(위 4 + MuJoCo 1), Python 은 `grep -c '^def test_' fleet/tests/test_*.py` → 9 · 3 · 7 · 7 = 26, 합쳐 **31건**. 한 함수가 여러 가지를 확인하면 그것은 "확인 가지"로 따로 적는다. 11/10~11 의 문서 몇 곳이 `test_ota_artifact` 를 확인 가지 수(11)로 세어 Python 30 이라고 적었다 — 같은 테스트를 두 가지 단위로 센 것이라 고쳤다(`DECISIONS.md` 11/11).
+**세는 법(11/11 에 정함)**: "테스트 N건"은 **테스트 함수의 수**다 — C++ 는 `ctest` 에 등록된 것 7(위 6 + MuJoCo 1), Python 은 `grep -c '^def test_' fleet/tests/test_*.py sdk/python/tests/test_*.py` → fleet 9 · 3 · 7 · 7 = 26 + SDK 4(`test_wire.py`) = 30, 합쳐 **37건**(11/11 낮에는 C++ 5 + Python 26 = 31건 — 저녁에 ZeroMQ 를 더하며 늘었다). 끝-대-끝 시험(컨테이너 통합 · 릴리스 카나리 · ZeroMQ 노드 `test_zmq_node.py`)은 함수가 아니라 스크립트 하나씩이라 따로 센다. 한 함수가 여러 가지를 확인하면 그것은 "확인 가지"로 따로 적는다. 11/10~11 의 문서 몇 곳이 `test_ota_artifact` 를 확인 가지 수(11)로 세어 Python 30 이라고 적었다 — 같은 테스트를 두 가지 단위로 센 것이라 고쳤다(`DECISIONS.md` 11/11).
 
 ## 6. ④ 작성 보조 작업본 — 무엇을 믿고 무엇을 믿지 않나
 - 있는 것: gcc·cmake·python, 저장소 전체, GitHub **읽기** 접근. 없는 것: ROS 2·Docker·MuJoCo·네트워크 일반.

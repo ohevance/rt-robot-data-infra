@@ -15,6 +15,7 @@ add_library(rt_core STATIC
   src/control_step.cpp
   src/sim_lag_backend.cpp
   src/robot_state_machine.cpp
+  src/wire.cpp
 )
 target_include_directories(rt_core PUBLIC include)
 target_link_libraries(rt_core PUBLIC Threads::Threads)
@@ -62,6 +63,15 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_executable(test_state_machine test/test_state_machine.cpp)
   target_link_libraries(test_state_machine PRIVATE rt_core)
   add_test(NAME state_machine COMMAND test_state_machine)
+
+  # 11/11: 통신 패킷(ZeroMQ 위에 싣는 형식)과 공유 메모리 seqlock — ZeroMQ 없이 돈다
+  add_executable(test_wire test/test_wire.cpp)
+  target_link_libraries(test_wire PRIVATE rt_core)
+  add_test(NAME wire COMMAND test_wire)
+
+  add_executable(test_shm_seqlock test/test_shm_seqlock.cpp)
+  target_link_libraries(test_shm_seqlock PRIVATE rt_core)
+  add_test(NAME shm_seqlock COMMAND test_shm_seqlock)
 
   # RT 권한이 없는 CI 러너에서도 도는 연기 테스트: 1 kHz 2초, 드롭 0이어야 통과
   add_test(NAME jitter_smoke COMMAND jitter_bench --no-rt --seconds 2 --period-us 1000 --label ci_smoke)

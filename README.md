@@ -1,7 +1,7 @@
 # rt-robot-data-infra
 
 로봇과 무관한(robot-agnostic) **실시간 제어 + 데이터 인프라** 저장소.
-ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 / MuJoCo / CI — 휴머노이드 로봇 회사의
+ROS 2 / PREEMPT_RT / DDS / ZeroMQ · 공유 메모리 · Python SDK / 장치 텔레메트리 관제 / OTA / 장애 복구 / MuJoCo / CI — 휴머노이드 로봇 회사의
 "실시간 제어 및 데이터 인프라" 직무를 겨냥해 2026년 11월에 2주 일정으로 만들고 있다(진행 기록: `docs/LOG.md`).
 
 ![ci](https://github.com/ohevance/rt-robot-data-infra/actions/workflows/ci.yml/badge.svg)
@@ -11,7 +11,8 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | ① 실시간 Linux 미들웨어, ROS 2/DDS | `rt_control/rt_core` RT 루프 + 측정기 + 제어 단계 + 상태 머신, `rt_control/ros2_adapter` ROS 2 노드, `dds_bench` | 표① 지연·지터 (p99.9/max) · 표② DDS 손실·지연 · 노드 `rt_status`(wake/work us, state) | 작성 완료, WSL 실행 확인(노드·DDS). **Pi 4 실측 완료(11/04~05)**: 일반 → PREEMPT_RT → 고정 → 격리, `table1_pi4.md` |
 | ② 실시간 로깅·모니터링·시각화·업데이트 | `fleet` 수집 → TimescaleDB → Grafana(14 패널), OTA 단계 배포·헬스 게이트·자동 롤백, 장애 주입 4종, **릴리스 → 배포 파이프라인**(태그 → 빌드 → 패키지 → 가상 50대 카나리 → Release 게시 → 장치가 내려받아 sha256·A/B 슬롯·자가 점검으로 설치, 실물은 자율 업데이트) `docs/RELEASE.md` | 표③-1 처리량·전달 지연 · 표③-2 장애 감지·복구·유실 · 표③-3 OTA 롤백 시간 · E22 50대 설치 시간 | 완료 — WSL 실측(11/04 표③-2·③-3), CI 러너에서도 매 push 재실행; 릴리스 파이프라인 11/10, 첫 태그 `v0.9.0-rc1` 이 첫 실행에 게시까지, 같은 날 정식 `v0.9.0` 게시(11/11); 운영 층은 클라우드 VM 에서 24시간(11/10~, `deploy/ec2/`) |
 | ③ 센서 스트리밍·로깅·전처리 자동화 | `fleet` 장치 에이전트(가상 50 + RT 노드 1), store-and-forward, 수집기 backlog, QoS 0/1 · **`data_pipeline`** 로봇 안 100 Hz 기록(rosbag2 MCAP) → CSV → 검증 요약 | 초당 메시지, 전달 지연 p95, 유실 % · 기록 실제 Hz·틈·추종 오차 | 작성 완료, WSL 실행 확인(기록 11/05) |
-| ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100 6 자유도 · **위로보틱스 공개 ALLEX 48 자유도**, 프로필만 다름), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스 ×2 모델) | CI 배지, 테스트 수(C++ 5 · Python 26 = 31건, 그 위에 컨테이너 통합 1 · 릴리스 카나리 1), 물리 한 주기 비용 p99(6 · 48 자유도) | 완료, CI 초록(ALLEX 단계 포함) — ALLEX 1 kHz p99 622(WSL) · 458(러너) us → **프로필 500 Hz**(실측 p99 1,000 = 2 ms 의 50 %), E21 |
+| ④ 시뮬레이션 · CI | `rt_core/mujoco_backend` (Menagerie SO-ARM100 6 자유도 · **위로보틱스 공개 ALLEX 48 자유도**, 프로필만 다름), CI 3잡(단위 → 통합 컨테이너 · MuJoCo 헤드리스 ×2 모델) | CI 배지, 테스트 수(C++ 7 · Python 30(fleet 26 · SDK 4) = 37건, 그 위에 끝-대-끝 셋: 컨테이너 통합 · 릴리스 카나리 · ZeroMQ 노드), 물리 한 주기 비용 p99(6 · 48 자유도) | 완료, CI 초록(ALLEX 단계 포함) — ALLEX 1 kHz p99 622(WSL) · 458(러너) us → **프로필 500 Hz**(실측 p99 1,000 = 2 ms 의 50 %), E21 |
+| ⑤ 실시간 계층 ↔ 상위 SW 인터페이스: ZeroMQ · 공유 메모리 · Python SDK (11/11 추가) | `rt_control/zmq_adapter` 노드(같은 `rt_core` 를 ZeroMQ 로 — ROS 2 노드와 껍질만 다름), 통신 패킷 `rt_core/wire.hpp`(C++·Python 골든 바이트 시험), 공유 메모리 seqlock `shm_seqlock.hpp`, Python SDK `sdk/python/rtsdk` | 명령 → RT 루프 반영 → 상태 **p50 1.02 / p99 1.76 ms**(샌드박스, 같은 PC), 1 kHz 상태 빠짐 0, seqlock 섞인 읽기 0 · E24 | 작성 · CI 끝-대-끝 시험에 넣음(push 뒤 첫 실행). WSL·Pi 값은 아직 — 예측을 E24 에 먼저 적었다 |
 
 ## 숫자 한눈에 (2026-11-11 기준 — 어디서 잰 값인지가 숫자만큼 중요하다)
 
@@ -44,13 +45,16 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | **실물 Pi → 클라우드 서버 연속 보고**(1 Hz, TLS + 비밀번호): 보낸 수 / 받은 수 / 유실 | **53,167 / 53,167 / 0** (14.77 시간, 재시작 0, 서버가 못 받은 최장 1.6 s, 수집기 재시작 1회 포함) | Pi 4(집 Wi-Fi, RT 커널) → **서버: 시드니**(EC2 t3.small), 11/10 18:37 ~ 11/11 09:23 | `soak_pi-rt_20261111T0023Z.json`, `deploy/ec2/soak_report.sh` |
 | **Pi ↔ 클라우드 브로커 MQTT 왕복**(TLS + 비밀번호, 1초 간격) · 접속 한 번 | **p50 290 / p95 291 ms**(60회, 최대 383) · 접속 1.2~1.5 s | Pi 4(집 Wi-Fi) → **서버: 시드니**. 0.2초 간격으로 재면 548~707 ms 로 보인다(Nagle — 재는 방법이 만든 값, E23) | `rtt_pi_sydney_20261111T0041Z_A_interval1.00.json`, E23 |
 | **실물 Pi 가 Release 를 받아 설치**(GitHub → sha256 → A/B 슬롯 → 자가 점검 → 전환) | **한 번 0.98 ~ 1.62 s**, 그중 자가 점검 0.67 s · 드롭 0/500 | Pi 4, RT 커널, 러너(arm)가 만든 `v0.9.0-rc1` aarch64 패키지 21.7 KB, 3회 | `install_pi4_once_v0.9.0-rc1.json`, E22 |
+| **ZeroMQ 노드: 명령 → RT 루프 반영 → 상태**(같은 PC) · ping 왕복 · 1 kHz 상태 흐름 | **p50 1.02 / p99 1.76 ms** · p50 0.33 ms · 5,170개 중 빠짐 0 (500회, 잃음 0) — 반영 지연의 절반은 1 kHz 루프의 다음 주기를 기다리는 몫 | **샌드박스**(2코어 VM, 일반 커널, RT 권한 없음) — 표①②③ 과 다른 곳. WSL·Pi 는 아직 | `zmq_bench_sandbox_20261111.json`, E24 |
 | 큐 상한을 넘겼을 때 (실험) | 7.5분 공백 중 마지막 49초분 2,450개 유실 | WSL2 | `docs/LOG.md` 11/04 |
 
 실시간 **지연의 진짜 값**은 Raspberry Pi 4 + PREEMPT_RT 실측(위 Pi 줄들)이다. 한 변수씩 바꾼 사슬(커널 → 고정 → 격리)과 그 이유는 [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) 의 순서도, 각 실험의 상세는 [`docs/experiments/`](docs/experiments/README.md). WSL 값은 "코드가 돌아간다 + 상대 비교"의 증거다.
 
 ## 지금 있는 것 (2026-11-11)
-- `rt_control/rt_core` — ROS 2와 무관한 순수 C++17 RT 핵심: SPSC 락프리 링 버퍼, 1 kHz RT 루프(SCHED_FIFO · mlockall · 절대 시각 타이머), 매 주기 할 일(RtStep), 제어 단계(ControlStep: 최신 명령 · 워치독 · 변화량 제한 · **상태 머신**), 백엔드 2종(**SimLag · MuJoCo**), `jitter_bench` 측정기, 단위 테스트 4개(+MuJoCo 1)
+- `rt_control/rt_core` — ROS 2와 무관한 순수 C++17 RT 핵심: SPSC 락프리 링 버퍼, 1 kHz RT 루프(SCHED_FIFO · mlockall · 절대 시각 타이머), 매 주기 할 일(RtStep), 제어 단계(ControlStep: 최신 명령 · 워치독 · 변화량 제한 · **상태 머신**), 백엔드 2종(**SimLag · MuJoCo**), `jitter_bench` 측정기, 단위 테스트 6개(+MuJoCo 1 — 11/11 에 통신 패킷·공유 메모리 seqlock 둘을 더함), 통신 패킷 `wire.hpp`(ZeroMQ 위에 싣는 형식), 공유 메모리 seqlock `shm_seqlock.hpp`
 - `rt_control/ros2_adapter` — ROS 2 Jazzy 노드 `rt_control_node`: `/joint_command` 구독 → RT 스레드 → `/joint_states` 100 Hz · `/rt_status` 1 Hz(JSON: wake/work us, 드롭, 워치독, state, backend, rmw). 파라미터 `backend: sim_lag | mujoco`
+- `rt_control/zmq_adapter` (11/11) — 같은 `rt_core` 를 ZeroMQ 로 감싼 노드 `rt_zmq_node`: 상태 PUB(1 kHz 까지) · 명령 ROUTER(TARGET → ACK, PING, GET_INFO) · 공유 메모리 `/rt_state`(seqlock, 같은 PC 의 다른 프로세스가 소켓 없이 읽는다 — `rt_state_peek`). 나쁜 패킷·NaN·관절 수 다름은 이유와 함께 거절. [`rt_control/zmq_adapter/README.md`](rt_control/zmq_adapter/README.md)
+- `sdk/python/rtsdk` (11/11) — Python SDK: `RobotClient`(상태 받기 · 목표 보내기 · ping · info, 답은 번호로 맞춤, 빠진 상태 세기), `wire`(패킷, C++ 와 같은 바이트), `bench`(지연 측정). [`sdk/python/README.md`](sdk/python/README.md)
 - `dds_bench` — DDS 구현체 × QoS × 크기별 RTT·손실률 측정 → 표② (WSL 실측 16행 포함)
 - `fleet` — Mosquitto·TimescaleDB·Grafana(docker-compose), 장치 에이전트(버퍼·재전송·유언·**OTA 진짜 설치**: 내려받기·sha256·A/B 슬롯·자가 점검·롤백, **자율 업데이트**), 실물 보드 에이전트 `pi_agent.py`, 가상 장치 N대, RT 노드 다리, 수집기(1초 묶음 COPY + 통계 + **DB 끊김 backlog** + **지속 세션 옵션**), **OTA 단계 배포기**, **장애 주입 4종 + 판정**, 진단 도구, DB 마이그레이션, 대시보드 생성기(14 패널), MQTT 왕복 시간 도구(`tools/mqtt_rtt.py`), 단위 테스트 4파일 26건(가짜 브로커·DB) + 통합 테스트 · 릴리스 카나리 스크립트
 - `scripts/` — `cyclictest_run.sh` · **`jitter_run.sh`**(표① 측정 한 줄, 온도·스로틀 기록), `make_table1/2/3.py`(표), `profile_to_params.py`(로봇 프로필 → ROS 파라미터, 백엔드 선택), **`get_mujoco.sh`**(MuJoCo + Menagerie 모델), **`package_release.sh`**(릴리스 패키지·sha256·매니페스트) · `merge_manifests.py` · `make_release_report.py`, **`check_public.py`**(커밋 전 공개 점검 — 글 파일과 pptx·docx 안까지)

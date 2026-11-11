@@ -42,7 +42,7 @@ void ControlStep::step(std::uint64_t iter, std::int64_t wake_lat_ns) {
   s.iter = iter;
   s.stamp_ns = now;
   s.wake_lat_ns = wake_lat_ns;
-  s.dof = cfg_.dof;
+  s.dof = cfg_.dof;  s.cmd_seq = last_cmd_seq_;
   s.watchdog_tripped = tripped_;
   s.robot_state = static_cast<std::uint8_t>(sm_.state());
   for (std::uint32_t j = 0; j < cfg_.dof; ++j) {
@@ -73,7 +73,7 @@ void ControlStep::take_latest_command(std::int64_t now_ns) {
   for (std::uint32_t j = 0; j < cfg_.dof; ++j) {
     desired_[j] = cmd.position[j];
   }
-  last_cmd_ns_ = now_ns;
+  last_cmd_ns_ = now_ns;  last_cmd_seq_ = cmd.seq;  // 번호는 상태에 실어 돌려준다 (s.cmd_seq)
   got_command_this_cycle_ = true;
   counters_.commands_applied.fetch_add(1, std::memory_order_relaxed);
 }

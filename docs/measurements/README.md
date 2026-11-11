@@ -31,6 +31,7 @@
 | `selftest_pi4_v0.9.0-rc1.json` | 실물 Pi 가 Release 의 aarch64 패키지를 설치하며 돌린 자가 점검 (500주기, 드롭 0) + 슬롯 상태 | Pi 의 `~/rt-slots-test/current/selftest.json`·`state.json` 출력에서 전사 | **Pi 4B, RT 커널**, `--no-rt` 0.5초 — 성능 측정이 아니라 "켜지는가" |
 | `soak_pi_sydney_20261111_0843.json` | Pi 의 첫 밤 14.09 h: 보낸 수·받은 수·유실 | 서버에서 psql 질의, 출력에서 전사 | Pi 4(집 Wi-Fi) → **서버: 시드니** |
 | `soak_pi-rt_<UTC시각>.json` | 같은 것을 스크립트로 (재시작·공백·가장 긴 간격·전달 지연 포함) | 서버에서 `deploy/ec2/soak_report.sh pi-rt` 의 출력 그대로 | Pi 4 → **서버: 시드니** |
+| `zmq_bench_sandbox_20261111.json` | ZeroMQ 노드 경로 시간 (E24): ping 왕복 · 명령 → RT 루프 반영 → 상태 · RT → 클라이언트 한 방향 · 1 kHz 상태 흐름. 노드의 `info`(관절 수·주기·RT 여부·libzmq 판) 포함, 주소 없음 | `python3 -m rtsdk.bench --n 500 --rate 100 --same-host` (노드 `rt_zmq_node --publish-hz 1000 --prio 0`) | **샌드박스** 2코어 VM, 일반 커널, 같은 PC — 경향만 |
 | `rtt_pi_sydney_<UTC시각>_[조건_]interval<간격>[_nodelay].json` (5개) | MQTT 왕복 시간 (E23): 첫 측정(0.2 s) + 검증 넷 A(1.00 s) · D(0.35 s) · C(0.20 s) · B(0.20 s, 클라이언트 NODELAY). **망의 왕복으로 인용하는 것은 A 뿐** — 간격이 왕복보다 짧은 것은 Nagle 로 커진 값이다. 검증 넷은 개별 값(`samples_ms`) 포함 | Pi 에서 `fleet/tools/mqtt_rtt.py` 의 출력 그대로 | Pi 4(집 Wi-Fi) → **서버: 시드니**, TLS + 비밀번호 |
 | `install_pi4_once_v0.9.0-rc1.json` | 실물 Pi 가 Release 를 받아 설치하는 데 걸린 단계별 시간, 3회 (E22) | `pi_agent.py --once` 의 출력에서 전사 | **Pi 4B, RT 커널**, 집 Wi-Fi, GitHub Release 에서 직접 |
 

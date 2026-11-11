@@ -19,6 +19,7 @@ struct JointCommand {
   std::int64_t stamp_ns = 0;             // 명령을 받은 시각 (단조 시계)
   std::uint32_t dof = 0;                 // 유효한 관절 수
   double position[kMaxJoints] = {0.0};   // 목표 위치 (rad)
+  std::uint32_t seq = 0;                 // 명령 번호 (ZeroMQ 패킷의 seq. ROS 2 쪽은 0) — 상태의 cmd_seq 로 돌아간다
 };
 
 // RT 스레드에서 상위(발행 스레드)로 올라가는 "한 주기의 상태"
@@ -32,6 +33,7 @@ struct JointStateSample {
   double position[kMaxJoints] = {0.0};   // 실제 위치 (rad)
   double velocity[kMaxJoints] = {0.0};   // 실제 속도 (rad/s)
   double target[kMaxJoints] = {0.0};     // 이번 주기에 로봇에 실제로 보낸 목표 (제한 적용 후)
+  std::uint32_t cmd_seq = 0;             // 이 주기까지 반영된 마지막 명령의 번호 (명령 → 반영 지연을 재는 데 쓴다)
 };
 
 // 명령 우편함 칸 수 (ROS 2 → RT). RT 는 매 주기 전부 비우고 "가장 최신 것"만 쓴다.
