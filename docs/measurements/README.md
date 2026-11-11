@@ -12,6 +12,7 @@
 | `table3.md` | 표③ (①처리량 ②장애 ③OTA) | `scripts/make_table3.py --minutes N` | — |
 | `table3_ci.md` | 표③, GitHub 러너에서 (10대 2 Hz) | CI `fleet_integration` 아티팩트 | ubuntu-24.04 러너 |
 | `mujoco_backend_ci.json` | MuJoCo 물리 한 주기 비용 | CI `mujoco` 아티팩트 (`test_mujoco_backend`) | ubuntu-24.04 러너 |
+| `mujoco_backend_wsl_20261104.json` | 같은 것, WSL 단독(4.9 / 6.3 / 20.8 us) | `test_mujoco_backend` 가 쓴 JSON. 11/04 에 저장소 뿌리에 `mujoco_backend_ci.json` 이라는 이름으로 커밋돼 있던 것을 11/11 에 이리로 옮기고 이름을 바꿨다(테스트를 뿌리에서 돌리면 그 이름으로 쓴다 — 러너 값과 헷갈린다) | WSL2 Ubuntu 24.04 (참고값) |
 | `mujoco_backend_allex_wsl_1khz.json` | 같은 것, ALLEX 48 자유도(1 kHz 첫 측정, E21) | `test_mujoco_backend` 출력에서 전사 | WSL2 Ubuntu 24.04 |
 | `mujoco_backend_allex_wsl_500hz.json` | 같은 것, ALLEX 500 Hz(프로필 기본, 1,000주기) | `test_mujoco_backend` 가 쓴 JSON | WSL2 Ubuntu 24.04 |
 | `mujoco_backend_allex_ci_1khz_run42172730308.json` | 같은 것, ALLEX 1 kHz | CI run 42172730308 아티팩트 `mujoco-ci` 복사(경로만 줄임) | ubuntu-24.04 러너 |
@@ -26,6 +27,7 @@
 
 | `record_summary_wsl_20261105.md`, `record_rt_status_wsl_20261105.csv` | 기록 파이프라인 첫 실행: 토픽별 Hz·틈, rt_status 29초, 추종 오차 | `data_pipeline/record.sh 30` → `bag_to_csv.py` (MCAP 원본 1.07 MB 는 `build/bags/`, 저장소 제외) | WSL2, MuJoCo 백엔드, 일반 스케줄링 |
 | `ota_release_v0.9.0-rc1_good.json` · `_bad.json` · `manifest_v0.9.0-rc1.json` | 첫 태그의 릴리스 카나리: 가상 50대 단계 배포, 깨진 패키지 거부·롤백, 게시된 매니페스트 (E22) | Release `v0.9.0-rc1` 의 자산 그대로 (`gh release download`, run 42927560505) | ubuntu-24.04 러너, 진짜 Mosquitto |
+| `ota_release_v0.9.0_good.json` · `_bad.json` · `manifest_v0.9.0.json` | 정식 태그의 릴리스 카나리 — 같은 시험의 두 번째 값(1.2 / 2.2 / 2.2 s, 전체 14.62 s, 3/50 에서 거부 → 롤백 1.0 s) (E22) | Release `v0.9.0` 의 자산 그대로 (공개 주소 `releases/download/v0.9.0/` 에서 받음, run 42934131689). 이름만 `ota_release_good.json` → `ota_release_v0.9.0_good.json` 꼴로 바꿨다 | ubuntu-24.04 러너, 진짜 Mosquitto |
 | `selftest_pi4_v0.9.0-rc1.json` | 실물 Pi 가 Release 의 aarch64 패키지를 설치하며 돌린 자가 점검 (500주기, 드롭 0) + 슬롯 상태 | Pi 의 `~/rt-slots-test/current/selftest.json`·`state.json` 출력에서 전사 | **Pi 4B, RT 커널**, `--no-rt` 0.5초 — 성능 측정이 아니라 "켜지는가" |
 | `soak_pi_sydney_20261111_0843.json` | Pi 의 첫 밤 14.09 h: 보낸 수·받은 수·유실 | 서버에서 psql 질의, 출력에서 전사 | Pi 4(집 Wi-Fi) → **서버: 시드니** |
 | `soak_pi-rt_<UTC시각>.json` | 같은 것을 스크립트로 (재시작·공백·가장 긴 간격·전달 지연 포함) | 서버에서 `deploy/ec2/soak_report.sh pi-rt` 의 출력 그대로 | Pi 4 → **서버: 시드니** |

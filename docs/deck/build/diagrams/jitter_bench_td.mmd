@@ -1,0 +1,10 @@
+flowchart TD
+  subgraph RTS["main 스레드 = RT 스레드 (SCHED_FIFO, mlockall, 고정 CPU 선택)"]
+    direction TB
+    L["RtLoop::run<br/>준비 5단계 → for 루프"] --> W["BusyWorkStep::step<br/>work_us 동안 바쁘게 돌기"]
+    L --> S["Sample {iter, wake_lat_ns,<br/>period_err_ns, work_ns}"]
+  end
+  S -- "g_ring.push (꽉 차면 drops++)" --> RING[["SpscRing 65,536칸 (2 MB)"]]
+  RING -- pop --> LOG["로깅 스레드 (일반 우선순위)<br/>벡터에 모음, 비면 1 ms 쉼"]
+  LOG --> ST["끝난 뒤: compute_stats<br/>min · avg · p50 · p99 · p99.9 · max"]
+  ST --> OUT["print_report / write_json / write_csv<br/>종료 코드: drops > 0 이면 1"]

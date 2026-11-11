@@ -1,4 +1,6 @@
 build/
+# 위의 build/ 는 빌드 산출물용인데 장표 생성 코드 폴더(docs/deck/build/)까지 가렸다 — 11/11 까지 그 폴더가 저장소에 없었다. 다시 넣는다
+!docs/deck/build/
 __pycache__/
 *.pyc
 .venv/
@@ -9,6 +11,8 @@ third_party/
 .DS_Store
 install/
 log/
+# test_mujoco_backend 를 저장소 뿌리에서 돌리면 여기에 결과를 쓴다 — 측정 원본은 docs/measurements/ 에만 둔다 (11/04 에 뿌리의 것이 커밋된 적이 있다)
+/mujoco_backend_ci.json
 
 # 운영 브로커의 비밀값 (deploy/ec2/setup.sh 가 만든다) — 절대 커밋하지 않는다
 fleet/mosquitto/certs/

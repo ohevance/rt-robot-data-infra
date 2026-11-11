@@ -1,0 +1,69 @@
+{
+  "version": "0.9.0-bad",
+  "bad": false,
+  "stages_pct": [
+    5,
+    50,
+    100
+  ],
+  "devices": 50,
+  "updated_devices": 3,
+  "success": false,
+  "rollback_s": 1.0,
+  "apply_s": 2.0,
+  "health_wait_s": 3.0,
+  "timeline": [
+    {
+      "t_s": 0.0,
+      "event": "산출물 [aarch64] http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-bad-aarch64.tar.gz (sha256 3d48511acb18…, 21299 bytes)"
+    },
+    {
+      "t_s": 0.0,
+      "event": "산출물 [x86_64] http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-bad-x86_64.tar.gz (sha256 3e678253988e…, 21011 bytes)"
+    },
+    {
+      "t_s": 0.0,
+      "event": "대상 장치 50대, 버전 0.9.0-bad, 단계 [5, 50, 100]%"
+    },
+    {
+      "t_s": 0.0,
+      "event": "단계 5%: 3대에 ota 전송"
+    },
+    {
+      "t_s": 1.0,
+      "event": "단계 5%: 설치 실패 3대 ['rel-001', 'rel-002', 'rel-003'] — 사유 ['ValueError: selftest 실패 (exit 1): selftest: 고의로 깨진 빌드 (롤백 검증용)'] → 롤백"
+    },
+    {
+      "t_s": 1.0,
+      "event": "롤백: 3대에 ota_rollback 전송"
+    },
+    {
+      "t_s": 2.0,
+      "event": "롤백 완료: 3대 복구, 1.0초"
+    }
+  ],
+  "started_at": "2026-11-11T00:48:51.929582+00:00",
+  "finished_at": "2026-11-11T00:48:53.931479+00:00",
+  "mode": "artifact",
+  "real_devices": [],
+  "total_s": 2.0,
+  "manifest": {
+    "source": "http://127.0.0.1:8089/manifest-bad.json",
+    "url": "http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-bad-aarch64.tar.gz",
+    "sha256": "3d48511acb18d3442b27718c3cd1ed1e818c8070383a8f5fbf7fd68e8e5ce583",
+    "size": 21299,
+    "commit": "76062ab25f0d334aadcddfbe5235d546241b7b81",
+    "arch": {
+      "aarch64": {
+        "url": "http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-bad-aarch64.tar.gz",
+        "sha256": "3d48511acb18d3442b27718c3cd1ed1e818c8070383a8f5fbf7fd68e8e5ce583",
+        "size": 21299
+      },
+      "x86_64": {
+        "url": "http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-bad-x86_64.tar.gz",
+        "sha256": "3e678253988e2b010037d26a0b5db81059f2e441cf61c6041debad4aa231d3b7",
+        "size": 21011
+      }
+    }
+  }
+}

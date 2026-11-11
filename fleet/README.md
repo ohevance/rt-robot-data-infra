@@ -3,7 +3,7 @@
 ```
  [가상 장치 x50: virtual_fleet.py] ──┐
  [RT 노드 다리: ros_status_bridge.py] ─┼─MQTT (fleet/<id>/telemetry, 1 Hz)──▶ [Mosquitto] ──▶ [collector.py: 1초 묶음 COPY] ──▶ [TimescaleDB] ──▶ [Grafana :3000]
- [실물 Pi (나중에)]                   ┘        ▲                                   │  DB 죽으면 backlog 에 보관        └─ collector_stats (초당 메시지·적재 시간·전달 지연·backlog)
+ [실물 Pi: pi_agent.py]               ┘        ▲                                   │  DB 죽으면 backlog 에 보관        └─ collector_stats (초당 메시지·적재 시간·전달 지연·backlog)
                                  끊기면 버퍼 ──┘ 재접속 시 QoS 1 재전송             │
  [ota/rollout.py] ──fleet/<id>/cmd {ota(+url,sha256) | ota_rollback}──▶ 장치 (5% → 50% → 100%, 헬스 게이트, 자동 롤백; 실물은 마지막)
                                                             장치: 내려받기 → sha256 → A/B 슬롯 → 자가 점검 → current 전환 (agent/ota_apply.py)
@@ -14,17 +14,21 @@
 | 파일 | 역할 |
 |---|---|
 | `docker-compose.yml` | 브로커·DB·Grafana 컨테이너 3개 (+ 선택: 수집기 컨테이너 `--profile collector`) |
+| `docker-compose.prod.yml` · `mosquitto/mosquitto-prod.conf` | 운영용 덮어쓰기(11/10): 밖으로는 8883 TLS + 비밀번호만, DB 비공개, Grafana 로그인, 수집기 상시 — 클라우드 VM 에 올릴 때(`deploy/ec2/README.md`) |
+| `common/mqtt_conn.py` | 모든 MQTT 클라이언트의 TLS·인증을 환경변수 한 곳에서(`FLEET_BROKER` · `FLEET_PORT` · `FLEET_TLS_CA` · `FLEET_USER` · `FLEET_PASS`). 아무것도 안 주면 개발 모드(localhost:1883) |
 | `db/init.sql` · `db/migrations/` · `db/migrate.py` | 스키마 · 이미 떠 있는 DB 에 새 표/컬럼 추가(002 OTA, 003 수집기 내성) |
 | `agent/device_agent.py` | 장치 한 대: 텔레메트리 발행, 끊기면 버퍼 → 재접속 시 재전송, 유언(LWT), 명령 수신(ping·health·ota·ota_rollback) |
 | `agent/virtual_fleet.py` | 가상 장치 N대 (`--keepalive`, `--telemetry-qos 0|1`) |
 | `agent/ros_status_bridge.py` | `/rt_status` → 장치 `rt-node-1` 로 (RT 노드가 51번째 장치. 상태 머신 이름이 장치 state 로) |
+| `agent/ota_apply.py` | 장치의 진짜 설치(11/10): 내려받기 → sha256 → A/B 슬롯 → 자가 점검 → `current` 원자적 전환 → 훅, 롤백 — `docs/RELEASE.md` 3절 |
+| `agent/pi_agent.py` | 실물 보드 에이전트(ROS 없이): 보드의 진짜 온도·CPU·메모리를 1 Hz 로, 자율 업데이트(`--auto-update`) |
 | `collector/collector.py` | 구독 → 파싱 → 1초 묶음 적재 + 통계. DB 끊기면 backlog, `--qos 1` 이면 지속 세션 |
 | `ota/rollout.py` | OTA 단계 배포 + 헬스 게이트 + 자동 롤백, 롤백 시간 측정 |
 | `chaos/inject.py` · `chaos/assert_results.py` | 장애 주입 4종(broker·db·collector·bad_firmware) → JSON · 기대대로 복구됐는지 판정 |
 | `tools/diag.py` | DB 진단: 오프라인 이벤트 분류, 전달 지연 튐 주기 |
-| `tools/mqtt_rtt.py` | MQTT 왕복 시간: 보내고 브로커를 거쳐 자기가 받는다 — 시계 하나로 잰다(대시보드의 전달 지연은 두 시계의 차이가 섞인다). 결과에 서버 주소를 적지 않는다 |
+| `tools/mqtt_rtt.py` · `tools/nagle_model.py` | MQTT 왕복 시간: 보내고 브로커를 거쳐 자기가 받는다 — 시계 하나로 잰다(대시보드의 전달 지연은 두 시계의 차이가 섞인다). 결과에 서버 주소를 적지 않는다 · 보내는 간격이 왕복보다 짧을 때 값이 커지는 까닭을 옮긴 모형(E23) |
 | `grafana/` | 데이터 소스·대시보드 자동 등록 (`make_dashboard.py` 가 JSON 생성) |
-| `tests/` | 브로커·DB 없이 도는 단위 테스트 3개(가짜 브로커 `fake_mqtt.py`·가짜 DB `fake_psycopg.py`) + 진짜 컨테이너로 도는 `integration.sh` |
+| `tests/` | 브로커·DB 없이 도는 단위 테스트 4파일 26건(가짜 브로커 `fake_mqtt.py`·가짜 DB `fake_psycopg.py`) + 진짜 컨테이너로 도는 `integration.sh`(장애 3종 + OTA + 산출물 OTA) · 릴리스 카나리 `release_canary.sh`(가상 50대, 태그 때) |
 
 ## 0. 단위 테스트 (어디서나, 1분)
 ```bash

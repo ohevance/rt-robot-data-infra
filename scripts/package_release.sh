@@ -4,7 +4,7 @@
 #
 #   무엇이 들어가나 : bin/jitter_bench (rt_core 의 1 kHz 루프 실행 파일) · robots/*.yaml (로봇 프로필)
 #                     · config/*.params.yaml (ROS 2 파라미터) · VERSION · COMMIT · selftest.sh (자가 점검)
-#   자가 점검        : 장치가 새 슬롯을 켜기 전에 selftest.sh 를 돌린다 — jitter_bench 를 0.5초 돌려 드롭 0 이면 통과.
+#   자가 점검        : 장치가 새 슬롯을 켜기 전에 selftest.sh 를 돌린다 — jitter_bench 를 0.5초 돌려 주기 100회 이상·드롭 10 % 이하면 통과(왜 0 이 아닌가: 아래 selftest.sh 머리말).
 #                     --bad 는 selftest 가 일부러 실패하는 패키지(롤백 검증용)를 만든다 (버전에 -bad 가 붙는다)
 #   manifest.json    : 버전 · 파일 이름(url, 매니페스트와 같은 폴더 기준 상대 경로) · sha256 · 크기 · 커밋 · 배포 정책
 #                     rollout.py --manifest 와 장치의 --auto-update 가 이 파일을 읽는다

@@ -5,6 +5,16 @@
 Pi 4B 4 GB 로 충분하다(64-bit Cortex-A72 4코어). 모니터·키보드는 첫 부팅 확인에만 쓰고 이후는 SSH 로 한다.
 **1~8단계 전부 11/04~05 에 실제로 거쳤다.** 결과는 `docs/measurements/table1_pi4.md`(14줄), 해석은 `docs/experiments/E18.md`·`E19a~d.md`. 다시 잴 때(다른 보드, 방열판 뒤)는 같은 순서로.
 
+**11/10 부터 Pi 에는 에이전트 서비스(`rt-pi-agent`)가 항상 돈다**(텔레메트리 1 Hz + 자율 업데이트 — `deploy/ec2/README.md` 4절). 표① 의 값은 서비스가 없던 때에 쟀으므로, 다시 잴 때는 조건을 같게 맞춘다:
+```bash
+# [Pi 창] 측정 전
+systemctl --user stop rt-pi-agent; systemctl --user is-active rt-pi-agent      # inactive
+#   … 4 · 6 · 7 단계의 측정 …
+# [Pi 창] 측정 뒤
+systemctl --user start rt-pi-agent; systemctl --user is-active rt-pi-agent     # active
+```
+서비스가 측정에 주는 영향은 재 보지 않았다(격리한 코어 3번에는 일반 프로세스가 배정되지 않지만, 재지 않은 것을 "없다"고 쓰지 않는다). 멈춘 동안 서버의 연속 기록에는 공백이 생긴다 — `soak_report.sh` 에 재시작 1회로 보이므로 그 시각과 이유를 `LOG.md` 에 적는다(`ENVIRONMENT.md` 4절).
+
 명령 앞의 **[Pi 창]** 은 `<사용자>@pi-rt:~$` 프롬프트(SSH), **[WSL 창]** 은 `(.venv) <사용자>@DESKTOP…:~/rt-robot-data-infra$` 프롬프트다.
 11/04 에 WSL 용 명령을 Pi 창에 쳐서 복사·커밋이 실패했다 — 창을 먼저 본다.
 

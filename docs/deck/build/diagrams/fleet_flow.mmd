@@ -1,0 +1,11 @@
+flowchart LR
+  DEV["장치 에이전트<br/>tick 1 Hz: seq·ts_ns·cpu·temp·fw·state"] -- "fleet/<id>/telemetry (QoS 0/1)" --> MQ["Mosquitto<br/>persistence true<br/>max_queued_messages 20000"]
+  DEV -- "fleet/<id>/status online (retained)<br/>유언 offline (브로커가 대신)" --> MQ
+  MQ -- "fleet/+/telemetry, fleet/+/status<br/>(지속 세션 clean_session=False)" --> COL["수집기<br/>on_message → pending<br/>1초마다 take_batch → COPY"]
+  COL -- "telemetry · events · collector_stats" --> DB[("TimescaleDB<br/>hypertable")]
+  DB --> GR["Grafana<br/>Fleet Overview 14 패널"]
+  OTA["rollout.py"] -- "fleet/<id>/cmd {ota | ota_rollback}" --> MQ
+  MQ -- "cmd" --> DEV
+  DEV -- "cmd_reply" --> MQ
+  INJ["inject.py"] -. "docker compose stop/start mqtt·db<br/>SIGTERM 수집기" .-> MQ
+  INJ -. 프로브·유실 SQL .-> DB

@@ -1,0 +1,8 @@
+flowchart LR
+  T["tick (1 Hz): metrics + seq + ts_ns → JSON"] --> S{"브로커에 붙어 있나?"}
+  S -- 예 --> P["publish(telemetry, qos=telemetry_qos)"]
+  S -- 아니오 --> Q{"버퍼 3600개 찼나?"}
+  Q -- 예 --> O["가장 오래된 것 버림"] --> R
+  Q -- 아니오 --> R["buffer.append → buffered_total += 1"]
+  C["on_connect (재접속)"] --> U["status online (retained) 발행<br/>cmd 구독"] --> F["flush_buffer: 모아 둔 것 전부 QoS 1 재전송<br/>flushed_total += n"]
+  W["비정상 종료"] -. "브로커가 대신" .-> L["유언: status offline (retained)"]

@@ -1,15 +1,15 @@
 # ---------------------------------------------------------------------------
 # CI (GitHub Actions) — push 할 때마다 GitHub 의 무료 리눅스 컴퓨터가 자동으로 세 가지 잡(job)을 돈다.
 #
-#   1) rt_core (1단계, ~2분)
+#   1) rt_core (1단계, 약 35초 — 11/11 의 값)
 #      rt_core 빌드 → 단위 테스트 4개(링 버퍼·제어 단계·상태 머신·MuJoCo 제외) → jitter_bench 1 kHz 2초 "드롭 0" 스모크
-#      → 표① 생성 → fleet 단위 테스트 3개(가짜 브로커·가짜 DB) → 대시보드 JSON 검사
-#   2) fleet_integration (2단계, ~5분)
+#      → 표① 생성 → fleet 단위 테스트 4파일 26건(가짜 브로커·가짜 DB) → 대시보드 JSON 검사
+#   2) fleet_integration (2단계, 약 2분 30초)
 #      진짜 Mosquitto·TimescaleDB 컨테이너 위에서 수집기 + 가상 장치 10대 → 장애 주입 3종 + 나쁜 펌웨어 롤백 + 정상 OTA(흉내)
 #      + 산출물 OTA(11/10): 릴리스 패키지를 로컬 HTTP 로 → 장치가 내려받기·sha256·A/B 슬롯·자가 점검 → 정상 10/10, 깨진 패키지 거부·롤백
 #      → "유실 0 · 복구됨 · 롤백됨 · 설치됨/거부됨" 판정 (fleet/tests/integration.sh 와 같은 스크립트)
 #   릴리스(태그 → 패키지 → 가상 50대 카나리 → Release 게시)는 별도 워크플로 release.yml — docs/RELEASE.md
-#   3) mujoco (2단계, ~1분)
+#   3) mujoco (2단계, 약 45초)
 #      MuJoCo 3.x 를 내려받아 rt_core 를 -DRT_CORE_WITH_MUJOCO=ON 으로 빌드, SO-ARM100(menagerie, 6 자유도) 모델로 백엔드 테스트 (화면 없음)
 #      → 위로보틱스 공개 모델 ALLEX(48 자유도, 고정 커밋)를 받아 같은 테스트를 프로필의 운영점(500 Hz)으로 한 번 더
 #

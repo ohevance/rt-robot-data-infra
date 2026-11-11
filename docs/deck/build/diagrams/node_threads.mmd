@@ -1,0 +1,15 @@
+flowchart LR
+  subgraph EXEC["ROS 2 실행기 스레드 (일반 우선순위)"]
+    direction TB
+    ON["on_command()<br/>position 길이 검사 → JointCommand"]
+    PS["publish_state() 100 Hz<br/>벨트를 비우고 최신 샘플만 발행"]
+    PT["publish_status() 1 Hz<br/>1초치 타이밍 → p50/p99/max JSON"]
+  end
+  subgraph RTT["RT 스레드 (SCHED_FIFO 80, 1 kHz)"]
+    direction TB
+    LOOP["RtLoop::run<br/>clock_nanosleep(TIMER_ABSTIME)"] --> STEP["ControlStep::step<br/>① 우편함 비우기 ② 워치독+상태 머신<br/>③ 변화량 제한 ④ Backend 쓰기/읽기 ⑤ 벨트에 올리기"]
+  end
+  ON -- "g_cmd_ring (64칸)" --> STEP
+  STEP -- "g_state_ring (2048칸)" --> PS
+  LOOP -- "g_timing_ring (65536칸)" --> PT
+  STEP --> BE["Backend::write_command / read_state"]

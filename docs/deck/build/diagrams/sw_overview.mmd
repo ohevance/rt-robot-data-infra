@@ -1,0 +1,26 @@
+flowchart LR
+  subgraph ROBOT["로봇 안 (실시간 쪽)"]
+    direction TB
+    CMD["/joint_command 50 Hz<br/>(ROS 2 구독)"] --> NODE["rt_control_node (ROS 2 껍질)<br/>스레드 3개 · 링 2개"]
+    NODE --> RT["rt_core RT 스레드 1 kHz<br/>RtLoop → ControlStep<br/>워치독 · 변화량 제한 · 상태 머신"]
+    RT --> BE["Backend<br/>SimLag | MuJoCo | (실물)"]
+    RT --> JS["/joint_states 100 Hz<br/>/rt_status 1 Hz JSON"]
+    JS --> REC["rosbag2 MCAP 기록<br/>→ CSV → summary.md"]
+  end
+  subgraph FLEET["관제 (데이터 인프라 쪽)"]
+    direction TB
+    AG["장치 에이전트 ×50 (+RT 노드 다리)<br/>버퍼·재전송·유언·OTA 적용"] --> MQ["Mosquitto 브로커<br/>persistence · QoS 0/1 · 큐 20000"]
+    MQ --> COL["수집기<br/>1초 묶음 COPY · backlog · 곱게 종료"]
+    COL --> DB["TimescaleDB<br/>telemetry · events · collector_stats · ota_rollouts"]
+    DB --> GR["Grafana 14 패널"]
+    OTA["rollout.py<br/>5% → 50% → 100% · 헬스 게이트 · 롤백"] -. cmd .-> MQ
+    CH["inject.py 장애 4종<br/>diag.py · assert_results.py"] -. stop/start .-> MQ
+    CH -. stop/start .-> DB
+  end
+  JS -. "ros_status_bridge (51번째 장치)" .-> AG
+  subgraph MEAS["측정·검증"]
+    direction TB
+    PI["Pi 4 PREEMPT_RT<br/>jitter_bench · cyclictest → 표①"]
+    DDS["dds_bench → 표②"]
+    CI["GitHub Actions 3잡<br/>단위 → 통합(컨테이너) · MuJoCo"]
+  end

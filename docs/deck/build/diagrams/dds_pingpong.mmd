@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant P as ping (rclpy)
+  participant D as DDS (Fast DDS 또는 Cyclone)
+  participant Q as pong (rclpy)
+  loop 500회, 100 Hz
+    P->>D: /dds_bench/ping {번호, 보낸 시각, 페이로드 64 B~1 MB}
+    D->>Q: 전달 (reliable: 재전송 / best_effort: 잃을 수 있음)
+    Q->>D: /dds_bench/pong 그대로 되돌림
+    D->>P: 도착 → RTT = 지금 − 보낸 시각
+  end
+  P->>P: 손실 = 보낸 번호 중 안 돌아온 것 / p50·p99·p99.9·max

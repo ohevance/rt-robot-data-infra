@@ -7,7 +7,7 @@
 ## 1. 전체 그림 — 어디서 무엇이 도는가
 
 ```
-[노트북/WSL]  코드 → git push ──▶ [GitHub Actions: ci.yml]  빌드 · 테스트 20건 · 컨테이너 통합(산출물 OTA 포함) · MuJoCo 2모델
+[노트북/WSL]  코드 → git push ──▶ [GitHub Actions: ci.yml]  빌드 · 테스트 31건(C++ 5 + Python 26) · 컨테이너 통합(산출물 OTA 포함) · MuJoCo 2모델
               git tag v1.2.0 ─▶ [GitHub Actions: release.yml]
                                    package(x86_64)  ┐  빌드 → ctest → tar.gz + sha256 + manifest.<arch>.json (+ 깨진 패키지)
                                    package(aarch64) ┘
@@ -25,10 +25,10 @@
 |---|---|---|---|
 | 빌드·검증·게시 | GitHub (클라우드) | 아니오 — push·태그 때만 | 빌드, 테스트, 패키지, 가상 50대 카나리, Release |
 | 보관 | GitHub Release | 항상(GitHub 가) | `manifest.json` + tar.gz. 장치의 "배포 서버" |
-| 지휘소(운영 층) | WSL (회사라면 실험실 서버 1대, 또는 클라우드 VM) | 있을 때만 더 보인다 | 브로커·수집기·DB·Grafana·단계 배포 지휘 |
+| 지휘소(운영 층) | WSL, 그리고 11/10 저녁부터 클라우드 VM 1대(AWS EC2, 시드니 — `deploy/ec2/README.md`) | WSL 은 있을 때만, 클라우드 VM 은 24시간 | 브로커·수집기·DB·Grafana·단계 배포 지휘 |
 | 장치 | Pi · 가상 장치 | Pi 는 항상 | 내려받기·검증·설치·자가 점검·롤백. 지휘소 없이도 자율 업데이트 |
 
-**노트북은 항상 켜 둘 수 없다**는 조건이 이 그림을 정했다(DECISIONS 11/10). 그래서 "항상 켜져 있어야 하는 것"은 GitHub 와 Pi 뿐이고, WSL 은 켜져 있을 때 지휘소가 된다. 운영 층을 24시간 두고 싶으면 `fleet/docker-compose.yml` 을 클라우드 VM 한 대에 올리면 된다(설정만 바뀐다 — `FLEET_BROKER`, `FLEET_PORT`).
+**노트북은 항상 켜 둘 수 없다**는 조건이 이 그림을 정했다(DECISIONS 11/10). 그래서 "항상 켜져 있어야 하는 것"은 GitHub 와 Pi 뿐이고, WSL 은 켜져 있을 때 지휘소가 된다. 운영 층을 24시간 두는 일은 같은 날 저녁에 했다 — `fleet/docker-compose.yml` 에 운영용 덮어쓰기(`docker-compose.prod.yml`)를 얹어 클라우드 VM 한 대에 올렸고, 장치 쪽은 코드가 아니라 환경변수(`FLEET_BROKER` · `FLEET_PORT` · `FLEET_TLS_CA` · `FLEET_USER` · `FLEET_PASS`)만 바뀌었다(`deploy/ec2/README.md`). 그 뒤로 항상 켜져 있는 것은 GitHub · Pi · 그 서버 셋이다. 그래도 **자율 업데이트는 서버와 무관하게 GitHub 만 본다** — 서버가 꺼져도 로봇은 스스로 받는다.
 
 ## 2. 산출물과 매니페스트
 
@@ -77,7 +77,7 @@ rt-robot-data-infra-1.2.0-aarch64/
 | 6 훅 | `post_switch.sh` 있으면 실행 | **스스로 이전 슬롯으로 복귀** (`post_switch_failed_rolled_back`) |
 
 - 실패는 텔레메트리에 실린다: `state=fault`, `ota_stage=extracted|downloaded|…`, `ota_error="…selftest 실패 (exit 1)…"`. 배포기는 이걸 보고 **헬스 대기 전에** 롤백을 결정한다(`Rollout.wait_apply`).
-- 롤백(`ota_rollback` 명령 또는 자율): `current` → `previous`. 내려받을 것이 없어 0.2초 안이다. 설치가 전환 전에 실패한 장치는 되돌릴 것이 없으므로 상태만 `ok` 로. 장치는 `ota_rollback` 을 받으면 **"직전 설치가 실패했는가"를 먼저** 본다 — 11/11 까지는 "이전 슬롯이 있는가"를 먼저 봐서, 두 번째 릴리스 뒤에 깨진 패키지가 오면 그것을 거부한 장치가 멀쩡한 현재 버전에서 한 단계 더 옛 버전으로 내려갔다(슬롯이 비어 있던 시험·카나리에서는 드러나지 않았다. DECISIONS 11/11).
+- 롤백(`ota_rollback` 명령 또는 자율): `current` → `previous`. 내려받을 것이 없어 장치 안의 일은 링크 교체 한 번이다(샌드박스에서 0.2초 안). 배포기가 "복구됨"을 확인하는 시간에는 장치의 다음 보고(1 Hz)까지가 들어가 러너에서는 1.0초였다(7절). 설치가 전환 전에 실패한 장치는 되돌릴 것이 없으므로 상태만 `ok` 로. 장치는 `ota_rollback` 을 받으면 **"직전 설치가 실패했는가"를 먼저** 본다 — 11/11 까지는 "이전 슬롯이 있는가"를 먼저 봐서, 두 번째 릴리스 뒤에 깨진 패키지가 오면 그것을 거부한 장치가 멀쩡한 현재 버전에서 한 단계 더 옛 버전으로 내려갔다(슬롯이 비어 있던 시험·카나리에서는 드러나지 않았다. DECISIONS 11/11).
 - 전원이 설치 도중 꺼지면: 1~4 단계면 `current` 는 옛 슬롯 그대로(쓰레기 `.download`·반쯤 풀린 슬롯은 다음 설치가 지운다), 5 단계의 `os.replace` 는 파일시스템이 원자성을 보장한다. 6 단계 도중이면 재부팅 뒤 `current` 는 새 슬롯이고 훅은 다시 돌지 않는다 — 이건 한계다(6절).
 
 ## 4. 배포의 세 가지 운전 모드 — 같은 설치 코드, 시작 버튼만 다르다
@@ -103,35 +103,24 @@ bash scripts/package_release.sh v0.0.0-local && bash scripts/package_release.sh 
 python3 scripts/merge_manifests.py --out build/release/manifest.json build/release/manifest.*.json
 python3 scripts/merge_manifests.py --out build/release/manifest-bad.json build/release/manifest-bad.*.json
 bash fleet/tests/release_canary.sh
-# [WSL 창] 진짜 릴리스 — 사람이 하는 유일한 일
-git tag v0.9.0-rc1 && git push origin v0.9.0-rc1          # '-' 가 있으면 pre-release. 정식은 v1.0.0
+# [WSL 창] 진짜 릴리스 — 사람이 하는 유일한 일 (아래 태그 둘은 11/11 에 실제로 올린 것. 다음 릴리스는 버전만 올린다)
+git tag v0.9.0-rc1 && git push origin v0.9.0-rc1          # '-' 가 있으면 pre-release — 실물의 자율 업데이트는 보지 않는다
 gh run watch                                              # package ×2 → canary → publish
 gh release view v0.9.0-rc1                                # 자산: tar.gz 2개, manifest.json, 카나리 JSON 2개
-# [WSL 창] 승인 모드로 LAN 함대(가상 + Pi)에 내보내기 — 브로커·가상 장치가 떠 있을 때
-python3 fleet/ota/rollout.py --manifest https://github.com/<owner>/<repo>/releases/download/v0.9.0-rc1/manifest.json
+git tag v0.9.0 && git push origin v0.9.0                  # 정식 — 게시되면 releases/latest 가 이것을 가리킨다
+# [WSL 창] 승인 모드로 함대(가상 + Pi)에 내보내기 — 브로커·가상 장치가 떠 있을 때
+python3 fleet/ota/rollout.py --manifest https://github.com/<owner>/<repo>/releases/download/v0.9.0/manifest.json
 ```
 ```bash
-# [Pi 창] 자율 모드 — 브로커는 있으면 붙고 없으면 1시간치 버퍼. 처음 한 번은 --once 로 확인
+# [Pi 창] 자율 모드 — 브로커는 있으면 붙고 없으면 1시간치 버퍼. 처음 한 번은 --once 로, 돌고 있는 것을 건드리지 않게 시험용 슬롯에
 cd ~/rt-robot-data-infra && git pull
-python3 fleet/agent/pi_agent.py --device-id pi-rt --slot-root ~/rt-slots \
+python3 fleet/agent/pi_agent.py --device-id pi-rt --slot-root ~/rt-slots-test \
     --auto-update https://github.com/<owner>/<repo>/releases/latest/download/manifest.json --once
-# 상시 (사용자 systemd 서비스; 로그아웃 뒤에도 돌게 loginctl enable-linger $USER 한 번)
-mkdir -p ~/.config/systemd/user && cat > ~/.config/systemd/user/rt-pi-agent.service <<'EOF'
-[Unit]
-Description=rt-robot-data-infra device agent (telemetry + autonomous OTA)
-After=network-online.target
-[Service]
-WorkingDirectory=%h/rt-robot-data-infra
-Environment=FLEET_BROKER=<브로커 호스트>
-ExecStart=/usr/bin/python3 fleet/agent/pi_agent.py --device-id pi-rt --slot-root %h/rt-slots --auto-update https://github.com/<owner>/<repo>/releases/latest/download/manifest.json --poll-s 600 --window 3-5
-Restart=always
-RestartSec=10
-[Install]
-WantedBy=default.target
-EOF
-systemctl --user daemon-reload && systemctl --user enable --now rt-pi-agent && systemctl --user status rt-pi-agent
+# 상시 — 사용자 systemd 서비스 (재부팅 뒤에도 로그인 없이 뜬다). 접속 설정은 ~/.config/rt-fleet/fleet.env 한 곳에만 둔다
+bash deploy/pi/install.sh              # 처음엔 fleet.env 를 만들고 멈춘다 → 값을 채우고 한 번 더 (채우는 법: deploy/ec2/README.md 4절)
+systemctl --user is-active rt-pi-agent && journalctl --user -u rt-pi-agent -n 20 --no-pager
 ```
-`<owner>/<repo>` 는 이 저장소의 GitHub 주소. 브로커 호스트는 WSL 의 LAN 주소(문서에는 적지 않는다 — 11/06 규칙).
+`<owner>/<repo>` 는 이 저장소의 GitHub 주소. 브로커 주소·비밀번호는 문서에 적지 않는다(11/06 규칙) — Pi 의 `fleet.env` 와 서버에만 있다. 서비스 파일은 `deploy/pi/rt-pi-agent.service`(11/10 에 이 문서의 손으로 쓰던 서비스 파일을 설치 스크립트로 바꿨다 — 주소를 서비스 파일에 적지 않기 위해서다).
 
 ## 6. 면접관이 물을 것 — 했다 / 안 했다 / 다음
 
@@ -151,18 +140,22 @@ systemctl --user daemon-reload && systemctl --user enable --now rt-pi-agent && s
 
 카나리의 숫자 — 단계별 적용 시간, 전체 시간, 깨진 패키지의 거부·롤백 시간 — 는 `docs/experiments/E22.md` 에 쌓는다.
 
-**첫 태그 `v0.9.0-rc1` (2026-11-11, run 42927560505) — 첫 실행에 게시까지 통과.**
+**첫 태그 `v0.9.0-rc1` (2026-11-11, run 42927560505) — 첫 실행에 게시까지 통과. 같은 날 정식 태그 `v0.9.0` (run 42934131689).**
 
-| 무엇 | 값 |
-|---|---|
-| 태그 push → Release 게시 | **1분 52초** (패키지 x86_64 21 s · aarch64 43 s → 카나리 48 s → 게시 11 s) |
-| 정상 패키지, 가상 50대 | 50/50, 단계별 적용 완료 **1.2 → 2.0 → 2.2 s**, 전체 14.41 s (헬스 대기 3 s × 3 포함) |
-| 깨진 패키지 | **3/50** 에서 자가 점검이 거부(0.6 s) → 롤백 **1.0 s** |
-| 산출물 | aarch64 21,734 B · x86_64 21,450 B, 사전 릴리스(태그에 `-`) — 실물의 자율 업데이트(`latest`)에는 잡히지 않는다 |
+| 무엇 | `v0.9.0-rc1` (사전 릴리스) | `v0.9.0` (정식) |
+|---|---|---|
+| 태그 push → Release 게시 | **1분 52초** (패키지 x86_64 21 s · aarch64 43 s → 카나리 48 s → 게시 11 s) | **1분 27초** (잡별 시간은 옮겨 적지 않았다) |
+| 정상 패키지, 가상 50대 | 50/50, 단계별 적용 완료 **1.2 → 2.0 → 2.2 s**, 전체 14.41 s (헬스 대기 3 s × 3 포함) | 50/50, **1.2 → 2.2 → 2.2 s**, 전체 14.62 s (같은 대기) |
+| 깨진 패키지 | **3/50** 에서 자가 점검이 거부(0.6 s) → 롤백 **1.0 s** | **3/50** 에서 거부(1.0 s) → 롤백 **1.0 s** |
+| 산출물 | aarch64 21,734 B · x86_64 21,450 B. 태그에 `-` 가 있어 사전 릴리스 — 실물의 자율 업데이트(`latest`)에는 잡히지 않는다 | aarch64 21,726 B · x86_64 21,446 B, 커밋 76062ab. 정식 — `releases/latest/download/manifest.json` 이 이 매니페스트다(받아서 같은 파일임을 확인) |
+
+두 번의 단계별 적용 시간은 0.2 s 안에서 같다. 거부까지의 시간이 0.6 → 1.0 s 로 다른 것은 보고 주기(1초)의 해상도 안이다 — 아래 줄.
 
 적용·롤백 시간에는 "장치의 다음 보고(1 Hz)까지 최대 1초"가 들어 있다(E22 4절).
 
-**실물 Pi 가 같은 Release 를 받아 설치(11/11, 시험용 슬롯, 4회)**: 한 번에 **0.98 ~ 1.62초** — 매니페스트 읽기 0.18~0.48 + 내려받기 0.09~0.43 + 해시 검증 0.001 + 풀기 0.03 + **자가 점검 0.67** + 링크 전환 0.001 미만 + 훅 0.009. 러너(ubuntu-24.04-arm)가 만든 aarch64 바이너리가 Pi 4 의 RT 커널에서 500주기 드롭 0 으로 자가 점검을 통과했다. 돌고 있는 서비스와 연속 기록은 건드리지 않았다(`install_pi4_once_v0.9.0-rc1.json`). 원본은 Release 자산을 그대로 옮긴 `docs/measurements/ota_release_v0.9.0-rc1_{good,bad}.json` · `manifest_v0.9.0-rc1.json`.
+**실물 Pi 가 같은 Release 를 받아 설치(11/11, 시험용 슬롯, 4회)**: 한 번에 **0.98 ~ 1.62초** — 매니페스트 읽기 0.18~0.48 + 내려받기 0.09~0.43 + 해시 검증 0.001 + 풀기 0.03 + **자가 점검 0.67** + 링크 전환 0.001 미만 + 훅 0.009. 러너(ubuntu-24.04-arm)가 만든 aarch64 바이너리가 Pi 4 의 RT 커널에서 500주기 드롭 0 으로 자가 점검을 통과했다. 돌고 있는 서비스와 연속 기록은 건드리지 않았다(`install_pi4_once_v0.9.0-rc1.json`). 원본은 Release 자산을 그대로 옮긴 `docs/measurements/ota_release_v0.9.0-rc1_{good,bad}.json` · `manifest_v0.9.0-rc1.json`, 정식은 `ota_release_v0.9.0_{good,bad}.json` · `manifest_v0.9.0.json`.
+
+**아직 숫자가 없는 것**: 실물 Pi 의 **서비스**가 정식 `v0.9.0` 을 스스로 받아 설치했는가(자율 모드, 03~05시). 위의 Pi 값은 사람이 `--once` 로 시험용 슬롯에 설치한 것이다. 확인하는 것은 셋 — Grafana 장치 목록의 fw 버전, Pi 의 `~/rt-slots/state.json`, 서버의 연속 기록(`deploy/ec2/soak_report.sh`). 결과는 E22 에 적는다.
 
 ## 8. 파일
 
@@ -174,5 +167,6 @@ systemctl --user daemon-reload && systemctl --user enable --now rt-pi-agent && s
 | `fleet/agent/device_agent.py` | `ota` 명령의 진짜 설치 경로, 자율 업데이트(`enable_auto_update`), `pick_artifact` |
 | `fleet/agent/pi_agent.py` | 실물 보드 에이전트 (ROS 없이, 자율 업데이트) · `ros_status_bridge.py` 도 같은 옵션 |
 | `fleet/ota/rollout.py` | `--manifest`, 실물 마지막, 설치 실패 즉시 감지 |
-| `fleet/tests/test_ota_artifact.py` | 단위·끝-대-끝 (가짜 브로커 + 진짜 설치, 9가지 확인) · `fleet/tests/release_canary.sh` · `integration.sh` 4b/4c |
+| `fleet/tests/test_ota_artifact.py` | 단위·끝-대-끝 (가짜 브로커 + 진짜 설치, 테스트 함수 7개 · 확인 11가지) · `fleet/tests/release_canary.sh` · `integration.sh` 4b/4c |
+| `deploy/pi/install.sh` · `rt-pi-agent.service` · `fleet.env.example` | 실물 Pi 의 서비스 등록 (접속 설정은 환경 파일 한 곳) |
 | `docs/DECISIONS.md` 2026-11-10 | 왜 이렇게 (버린 대안 포함) |

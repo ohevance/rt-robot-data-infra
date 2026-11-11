@@ -1,0 +1,10 @@
+flowchart TD
+  N["rt_control_node<br/>/joint_states 100 Hz · /joint_command 50 Hz · /rt_status 1 Hz"] --> R["record.sh 30<br/>timeout --foreground 30 ros2 bag record -s mcap<br/>--disable-keyboard-controls --topics …"]
+  R --> M["build/bags/run_<시각>/<br/>*.mcap 1.07 MB + metadata.yaml"]
+  M --> B["bag_to_csv.py<br/>open_bag → read_messages"]
+  B --> C1["joint_states.csv 2,964행"]
+  B --> C2["joint_command.csv 1,482행"]
+  B --> C3["rt_status.csv 29행"]
+  C1 --> S["summary.md<br/>rate_and_gaps: 실제 Hz · 틈<br/>tracking_error: |목표 − 위치| 관절별"]
+  C2 --> S
+  C3 --> S

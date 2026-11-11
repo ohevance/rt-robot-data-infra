@@ -1,0 +1,42 @@
+flowchart LR
+  subgraph PC["① 개발 PC — Windows 11 + WSL2 Ubuntu 24.04 (코드를 실제로 돌리는 곳)"]
+    direction TB
+    WSL["WSL 터미널<br/>.bashrc 가 venv·ROS 2·RT_REPO_ROOT 자동 설정"]
+    ROS["ROS 2 Jazzy 노드 rt_control_node<br/>1 kHz RT 루프 + MuJoCo 백엔드"]
+    DOCK["Docker 컨테이너 3개<br/>fleet_mqtt :1883 · fleet_db(TimescaleDB) :5432 · fleet_grafana :3000"]
+    PY["파이썬 프로세스<br/>수집기 · 가상 장치 50대 · 장애 주입 · OTA 배포기 · 진단"]
+    REC["기록 파이프라인<br/>rosbag2 MCAP → CSV → summary.md"]
+    WSL --> ROS
+    WSL --> PY --> DOCK
+    ROS --> REC
+    ROS -. 텔레메트리 1 Hz (ros_bridge) .-> DOCK
+  end
+
+  subgraph PI["② Raspberry Pi 4B 4 GB — Ubuntu 24.04 + PREEMPT_RT (표①의 진짜 숫자만 재는 곳)"]
+    direction TB
+    PIK["커널 6.8.0-2054-raspi-realtime<br/>/sys/kernel/realtime = 1, isolcpus=3"]
+    PIB["같은 저장소 clone → rt_core 빌드<br/>jitter_run.sh · cyclictest_run.sh"]
+    PIK --> PIB
+  end
+
+  subgraph GH["③ GitHub — ohevance/rt-robot-data-infra (진실의 원천 + 자동 검사원)"]
+    direction TB
+    REPO["저장소 main<br/>코드 · 문서 · docs/measurements 원본"]
+    CI["Actions 러너 ubuntu-24.04 (GitHub 의 VM)<br/>잡 3개: rt_core → fleet_integration · mujoco"]
+    BADGE["README 배지 ✓/✗<br/>아티팩트(jitter-ci · fleet-integration · mujoco-ci)"]
+    REPO -- push 마다 --> CI --> BADGE
+  end
+
+  subgraph CL["④ 작성 보조 작업본 — Claude 의 리눅스 샌드박스 (코드·문서 초안을 쓰는 곳)"]
+    direction TB
+    SB["gcc · cmake · python 만 있음<br/>ROS 2·Docker·MuJoCo 없음 → 가짜 브로커·DB·스텁으로 논리만 검증"]
+    BUNDLE["git bundle (patch-NN.bundle)"]
+    SB --> BUNDLE
+  end
+
+  BUNDLE -- "Downloads 폴더로 전달" --> WSL
+  WSL -- "git pull --no-rebase (bundle) → git push" --> REPO
+  REPO -- "git fetch (읽기 전용)" --> SB
+  REPO -- "git clone / pull (HTTPS, 로그인 없음)" --> PIB
+  PIB -- "scp *pi4* → docs/measurements → commit·push" --> WSL
+  ROS -. "WSL 수치는 참고값 (가상 커널)" .-> REC

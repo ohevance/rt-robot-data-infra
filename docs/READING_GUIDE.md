@@ -1,11 +1,11 @@
 # 코드 읽기 가이드 (분석용)
 
 D0 측정기(1~8번), D1 제어 단계·ROS 2 노드·DDS 측정(9~13번), D2 관제(14~16번), D3 상태 머신·OTA(17~19번),
-D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24~25번), D6 기록 파이프라인(26번). 전부 합쳐 약 5,400줄.
+D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24~25번), D6 기록 파이프라인(26번), 11/10 릴리스 → 배포(27번), 11/10~11 클라우드 운영 층·실물 장치(28번). 26번까지가 약 5,400줄이었고, 11/11 기준 저장소의 코드·스크립트·설정은 약 10,650줄이다(`git ls-files | grep -vE '^docs/|\.md$|\.json$|^LICENSE' | xargs wc -l` — 문서와 측정 원본 제외).
 아래 순서로 읽으면 됩니다. 막히는 곳은 "파일명 + 줄 번호"로 물어보면 그 부분만 설명합니다.
 실험이 무엇이었는지는 [`EXPERIMENTS.md`](EXPERIMENTS.md)(한 표), 그 과정의 사고와 해결은 [`LOG.md`](LOG.md)(시간순).
 코드가 **어디서** 도는지(개발 PC·Pi·GitHub CI·작업본, 트리거, 결과 읽는 법)는 [`ENVIRONMENT.md`](ENVIRONMENT.md) 를 먼저 한 번 읽는다.
-처음이라면 코드보다 **장표**([`deck/README.md`](deck/README.md), 139장)로 전체 길을 먼저 본다 — 왕초보 바탕 지식부터 시작해 명령이 로봇의 움직임이 되기까지 10단계를 위에서 아래로 따라가며 단계마다 그림·핵심 코드(파일:줄)·판단이 나오고(시험·검증은 3부에 번호로), 장표마다 왕초보용 설명 문서(`deck/notes/NNN.docx`)가 있다. 아래 26항목은 그 장표의 코드 장표 순서와 같다.
+처음이라면 코드보다 **장표**([`deck/README.md`](deck/README.md), 145장)로 전체 길을 먼저 본다 — 왕초보 바탕 지식부터 시작해 명령이 로봇의 움직임이 되기까지 10단계를 위에서 아래로 따라가며 단계마다 그림·핵심 코드(파일:줄)·판단이 나오고(시험·검증은 3부에 번호로), 장표마다 왕초보용 설명 문서(`deck/notes/NNN.docx`)가 있다. 아래 28항목 가운데 1~26번은 그 장표의 코드 장표 순서와 같고, 27·28번(11/10~11)은 7부 끝의 덧붙임 장표 137~142 와 짝이다.
 
 ## 1. 읽는 순서
 
@@ -38,6 +38,9 @@ D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24
 | 25 | `rt_control/rt_core/test/test_mujoco_backend.cpp` · `scripts/get_mujoco.sh` · `rt_control_node.cpp` 의 `make_backend()` | 약 130 / 60 / 50 | 물리 모델 위 2000주기 테스트(움직임 + 한 주기 비용 p99) · 설치 · 파라미터로 백엔드 고르기 | 테스트가 p99 < 900 us 를 보는 이유(1 kHz 안에 물리가 들어오나) · 노드가 MuJoCo 없이 빌드됐을 때 어떻게 실패하나(조용히 바꾸지 않는다) |
 | 26 | `data_pipeline/record.sh` · `data_pipeline/bag_to_csv.py` | 약 20 / 230 | rosbag2(MCAP) 기록 → CSV 3개 + 검증 요약(주기·틈·추종 오차) | "로깅"과 "관제"가 왜 다른 길인가 · 추종 오차에서 중력 처짐을 어떻게 읽나 |
 | 27 | `fleet/agent/ota_apply.py` · `fleet/ota/rollout.py`(`--manifest`) · `scripts/package_release.sh` · `.github/workflows/release.yml` · `docs/RELEASE.md` | 약 230 / +80 / 100 / 110 | 릴리스 → 배포: 패키지·매니페스트 → 가상 50대 카나리 → 게시 → 장치의 내려받기·sha256·A/B 슬롯·자가 점검·전환, Pi 자율 업데이트 | 왜 A/B 슬롯인가(전원 차단) · 자가 점검이 헬스 게이트보다 먼저 거부하는 이유 · 왜 러너가 실물에 직접 배포하지 않나 · sha256 과 서명의 차이 |
+| 28 | `fleet/common/mqtt_conn.py` · `fleet/agent/pi_agent.py` · `deploy/ec2/setup.sh` · `deploy/ec2/soak_report.sh` · `fleet/tools/mqtt_rtt.py`(+ `nagle_model.py`) · `docs/experiments/E23.md` | 약 85 / 170 / 120 / 115 / 250(+140) | 운영 층을 클라우드에, 실물 장치 1대: 모든 MQTT 클라이언트의 TLS·인증을 환경변수 한 곳에서 · 보드의 진짜 숫자(온도·CPU·메모리)를 보내는 에이전트와 자율 업데이트 · 서버 설치(자체 CA, 비밀번호, compose) · 밤샘 기록을 일련번호로 세기 · MQTT 왕복 시간 | 코드를 바꾸지 않고 개발(1883 평문) ↔ 운영(8883 TLS)을 오가는 자리가 어디인가 · 비밀값이 저장소에 없다는 것을 어떻게 보이나 · 그래프 대신 세어서 보는 이유(유실·재시작·가장 긴 간격) · 왜 `ping` 이 아니라 MQTT 왕복인가 · 보내는 간격이 왕복보다 짧으면 왜 값이 커지나(Nagle) |
+
+줄 수는 그 항목을 쓴 날의 값이다(같은 파일에 뒤 항목이 더한 줄은 `(+N)` 으로 적었다). 지금의 줄 수는 `wc -l` 로 본다 — 11/11 기준 `device_agent.py` 335 · `collector.py` 398 · `rollout.py` 422 · `ota_apply.py` 250.
 
 ## 2. 모든 파일에 던지는 질문 3개
 
@@ -64,6 +67,7 @@ WSL 수치는 **참고값**입니다(실시간 커널 아님). 보면서 생각�
 ./build/rt_core/test_state_machine                 # "OK: state_machine"  — 허용 전이·거절 전이·STOP
 python3 fleet/tests/test_ota_rollout.py            # 가짜 브로커 위 가상 20대: 정상 배포 / 나쁜 펌웨어 롤백(1대에서 멈춤) / 시간 초과
 python3 fleet/tests/test_collector_resilience.py   # DB 죽음 → backlog → 복귀, 상한, 지속 세션
+python3 fleet/tests/test_ota_artifact.py           # 진짜 설치(로컬 HTTP + tar.gz): sha 불일치 · 자가 점검 실패 · 롤백 · 자율 업데이트 (11/10~11)
 ```
 진짜 컨테이너로 전체: `bash fleet/tests/integration.sh` (fleet/README.md 10번). MuJoCo: `backends/mujoco/README.md`.
 

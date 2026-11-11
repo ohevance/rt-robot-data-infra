@@ -1,7 +1,7 @@
 # 전체 환경 지도 — 무엇이 어디서 돌고, 왜 거기인지, 언제 움직이고, 결과를 보고 무엇을 판단하나
 
 `ARCHITECTURE.md` 가 **소프트웨어의 구조**(RT 루프·수집기·OTA 가 어떻게 생겼나)라면, 이 문서는 **환경의 구조**다 —
-컴퓨터 네 곳(개발 PC · Raspberry Pi · GitHub · 작성 보조 작업본)에 무엇이 있고, 코드와 숫자가 어느 길로 오가며, 각 곳의 결과를 어떻게 읽는가.
+컴퓨터 다섯 곳(개발 PC · Raspberry Pi · GitHub · 작성 보조 작업본 · 11/10 부터 클라우드 서버)에 무엇이 있고, 코드와 숫자가 어느 길로 오가며, 각 곳의 결과를 어떻게 읽는가.
 처음 읽는 사람 기준으로 썼다. 용어는 처음 나올 때 풀고, 판단 기준은 표로.
 
 ## 0. 한 장 그림
@@ -21,11 +21,13 @@ flowchart LR
     ROS -. 텔레메트리 1 Hz (ros_bridge) .-> DOCK
   end
 
-  subgraph PI["② Raspberry Pi 4B 4 GB — Ubuntu 24.04 + PREEMPT_RT (표①의 진짜 숫자만 재는 곳)"]
+  subgraph PI["② Raspberry Pi 4B 4 GB — Ubuntu 24.04 + PREEMPT_RT (표①의 진짜 숫자를 재는 곳 + 11/10 부터 실물 장치 1대)"]
     direction TB
     PIK["커널 6.8.0-2054-raspi-realtime<br/>/sys/kernel/realtime = 1, isolcpus=3"]
     PIB["같은 저장소 clone → rt_core 빌드<br/>jitter_run.sh · cyclictest_run.sh"]
+    PIA["사용자 서비스 rt-pi-agent (11/10~)<br/>텔레메트리 1 Hz · 자율 업데이트(10분마다 확인, 03~05시에만 설치)"]
     PIK --> PIB
+    PIK --> PIA
   end
 
   subgraph GH["③ GitHub — ohevance/rt-robot-data-infra (진실의 원천 + 자동 검사원)"]
@@ -33,7 +35,9 @@ flowchart LR
     REPO["저장소 main<br/>코드 · 문서 · docs/measurements 원본"]
     CI["Actions 러너 ubuntu-24.04 (GitHub 의 VM)<br/>잡 3개: rt_core → fleet_integration · mujoco"]
     BADGE["README 배지 ✓/✗<br/>아티팩트(jitter-ci · fleet-integration · mujoco-ci)"]
+    REL["release.yml (v* 태그마다, 11/10~)<br/>패키지 x86_64 + aarch64 → 가상 50대 카나리 → Release 게시"]
     REPO -- push 마다 --> CI --> BADGE
+    REPO -- 태그마다 --> REL
   end
 
   subgraph CL["④ 작성 보조 작업본 — Claude 의 리눅스 샌드박스 (코드·문서 초안을 쓰는 곳)"]
@@ -43,26 +47,38 @@ flowchart LR
     SB --> BUNDLE
   end
 
+  subgraph EC["⑤ 클라우드 서버 — AWS EC2 t3.small, 시드니 (운영 층이 24시간 도는 곳, 11/10~)"]
+    direction TB
+    ECM["Mosquitto :8883<br/>TLS(자체 CA) + 비밀번호"]
+    ECC["수집기(QoS 1) → TimescaleDB(보존 14일) → Grafana(로그인)"]
+    ECM --> ECC
+  end
+
   BUNDLE -- "Downloads 폴더로 전달" --> WSL
   WSL -- "git pull --no-rebase (bundle) → git push" --> REPO
   REPO -- "git fetch (읽기 전용)" --> SB
   REPO -- "git clone / pull (HTTPS, 로그인 없음)" --> PIB
   PIB -- "scp *pi4* → docs/measurements → commit·push" --> WSL
+  PIA -- "MQTT 8883 TLS, 1 Hz (밖으로 나가는 연결만)" --> ECM
+  REL -- "Release 의 manifest.json · tar.gz (Pi 가 스스로 읽는다)" --> PIA
+  REPO -- "git pull (setup.sh · soak_report.sh)" --> ECC
+  ECC -- "밤샘 기록을 센 JSON → scp → docs/measurements" --> WSL
   ROS -. "WSL 수치는 참고값 (가상 커널)" .-> REC
 ```
 
-읽는 법: **실선은 코드와 숫자가 실제로 흐르는 길**, 점선은 참고 관계. GitHub 가 가운데에 있는 이유는 네 곳 모두 GitHub 를 기준으로 맞추기 때문이다(Pi 도, 작업본도, PC 도 `main` 에서 받는다).
+읽는 법: **실선은 코드와 숫자가 실제로 흐르는 길**, 점선은 참고 관계. GitHub 가 가운데에 있는 이유는 다섯 곳 모두 GitHub 를 기준으로 맞추기 때문이다(Pi 도, 작업본도, PC 도, 서버도 `main` 에서 받는다). ⑤ 는 11/10 에 더했다 — 그 전의 그림은 네 곳이었고, 표①②③ 의 숫자는 전부 ⑤ 없이 잰 것이다.
 
-## 1. 네 곳이 각각 왜 필요한가 (한 곳으로는 안 되는 이유)
+## 1. 다섯 곳이 각각 왜 필요한가 (한 곳으로는 안 되는 이유)
 
 | 곳 | 하는 일 | 왜 여기여야 하나 | 못 하는 것 |
 |---|---|---|---|
 | ① 개발 PC (WSL2) | 모든 코드를 **실제로 돌린다** — ROS 2 노드, 관제 컨테이너, 가상 장치 50대, 장애 주입, 기록 | 12 CPU·Docker·ROS 2 가 있는 유일한 곳. 사람이 보는 Grafana 화면도 여기 | **실시간 지연 수치** — WSL2 는 가상 커널이라 max 가 1 ms 턱밑(921~2,026 us). 그래서 WSL 숫자는 전부 "참고값" 표기 |
-| ② Raspberry Pi 4 | **표① 하나만** 잰다 — 일반 커널 vs PREEMPT_RT, 고정, 격리 | 진짜 하드웨어 + 진짜 RT 커널이 있는 유일한 곳. 4코어라 격리 실험이 된다 | ROS 2·Docker·MuJoCo 없음(안 깐다). GitHub 로그인도 없다 — 측정만 하고 커밋은 WSL 에서 |
+| ② Raspberry Pi 4 | **표①** 을 잰다 — 일반 커널 vs PREEMPT_RT, 고정, 격리. 11/10 부터는 **실물 장치 1대** 역할도 한다 — 서비스(`rt-pi-agent`)가 텔레메트리를 ⑤ 로 보내고, GitHub Release 를 스스로 받아 설치한다 | 진짜 하드웨어 + 진짜 RT 커널이 있는 유일한 곳. 4코어라 격리 실험이 된다 | ROS 2·Docker·MuJoCo 없음(안 깐다). GitHub 로그인도 없다 — 측정만 하고 커밋은 WSL 에서 |
 | ③ GitHub | 저장소(이력 전체) + **CI**(push 마다 자동 검사) + 공개 링크(이력서·영상) | 어느 PC 에서도 같은 코드를 받는 기준점. CI 는 "내 PC 에서만 되는" 문제를 걸러 준다(매번 새 VM) | RT 커널·RT 권한이 없어 지연 **수치**를 못 잰다 → "돌아간다" 의 증거이지 "얼마나 빠르다" 의 증거가 아니다 |
 | ④ 작성 보조 작업본 | 코드·문서 초안을 쓰고, 컴파일·단위 테스트까지 돌려 본 뒤 **bundle** 로 넘긴다 | 작성자가 읽고 검토할 수 있게 작은 패치 단위로 전달하기 위해 | 네트워크가 막혀 ROS 2·Docker·MuJoCo 없음 → 가짜(fake_mqtt·fake_psycopg·MuJoCo 스텁)로 논리만. **진짜 실행은 항상 ① 이 처음** |
+| ⑤ 클라우드 서버 (AWS EC2, 시드니) | **운영 층을 24시간** 돌린다 — 브로커(8883, TLS + 비밀번호) · 수집기 · TimescaleDB · Grafana. 실물 Pi 의 텔레메트리를 받고, 밤샘 기록을 세는 곳(`deploy/ec2/soak_report.sh`) | 항상 켜져 있고 집 밖에서 닿는 유일한 곳. 노트북(①)은 꺼지고, Pi 는 공유기 안쪽이라 밖에서 먼저 붙을 수 없다(그래서 Pi 가 밖으로 붙는다) | **한국에서 멀다** — MQTT 왕복 290 ms(`experiments/E23.md`). 서버 왕복이 들어가는 숫자에는 "서버: 시드니"를 적고 ①·러너에서 잰 표③ 과 섞지 않는다. 한 대라 서버가 죽으면 운영 층이 멈춘다(로봇은 계속 돌고, 장치는 끊긴 동안의 텔레메트리를 3,600건 = 1 Hz 로 1시간까지 모아 둔다). 설치와 한계는 `deploy/ec2/README.md` |
 
-비유: ① 작업장, ② 계측실(진동 없는 방), ③ 도면 보관소 겸 검사원, ④ 설계 사무실. 설계 사무실에서 그린 도면(bundle)은 작업장에서 먼저 조립해 보고(WSL 실행), 보관소에 올리면 검사원이 매번 다시 조립해 본다(CI). 계측실은 한 가지 측정(지연)만 하고 결과지를 작업장으로 보낸다(scp).
+비유: ① 작업장, ② 계측실(진동 없는 방), ③ 도면 보관소 겸 검사원, ④ 설계 사무실, ⑤ 불이 꺼지지 않는 관제실(다만 먼 도시에 있다). 설계 사무실에서 그린 도면(bundle)은 작업장에서 먼저 조립해 보고(WSL 실행), 보관소에 올리면 검사원이 매번 다시 조립해 본다(CI). 계측실은 한 가지 측정(지연)만 하고 결과지를 작업장으로 보낸다(scp).
 
 ## 2. 코드와 숫자가 오가는 길 (언제, 무엇이 움직이나)
 
@@ -73,9 +89,13 @@ flowchart LR
 | ③ → ④ 기준 맞추기 | 패치를 만들기 전 | 작업본이 `git fetch`(읽기 전용) | 패치의 기준 커밋이 사용자의 main 과 같음 — "lacks prerequisite" 오류가 안 남 |
 | ③ → ② Pi 갱신 | 측정 스크립트가 바뀌었을 때 | [Pi] `git pull` | untracked 결과 파일이 있으면 막힌다 → `rm -f docs/measurements/*pi4*` 뒤 pull(GitHub 에 이미 있음) |
 | ② → ① → ③ 측정 결과 | 측정이 끝났을 때 | [WSL] `scp '<사용자>@<Pi IP>:~/rt-robot-data-infra/docs/measurements/*pi4*' docs/measurements/` → `make_table1.py` → commit → push | `table1_pi4.md` 줄 수, 각 줄의 "스로틀 0" |
+| ③ → ② 릴리스 (11/10~) | `v*` 태그가 **정식** 으로 게시되면 (`-` 가 붙은 사전 릴리스는 보지 않는다) | 사람이 하는 것은 `git tag vX.Y.Z && git push origin vX.Y.Z` 까지. Pi 의 서비스가 10분마다 `releases/latest/download/manifest.json` 을 읽고, 새 버전이면 03~05시에 내려받기 → sha256 → 슬롯 → 자가 점검 → 전환 | Grafana 장치 목록의 fw 버전, [Pi] `cat ~/rt-slots/state.json` |
+| ② → ⑤ 텔레메트리 (11/10~) | 항상 (1 Hz) | 서비스가 한다 — 사람 손이 없다 | [EC2 안] `sudo docker logs --tail 5 fleet_collector` 의 `online=1 … backlog=0 db_err=0`, Grafana |
+| ⑤ → ① → ③ 밤샘 기록 | 숫자가 필요할 때 | [EC2 안] `bash deploy/ec2/soak_report.sh pi-rt` → [WSL] `scp` 로 `docs/measurements/` → commit → push | JSON 의 보낸 수 = 받은 수(유실 0), 재시작 횟수, 가장 긴 간격 |
+| ③ → ⑤ 서버 갱신 | 서버 쪽 스크립트·설정이 바뀌었을 때 | [EC2 안] `cd ~/rt-robot-data-infra && git pull` (설정이 바뀌었으면 `bash deploy/ec2/setup.sh` 다시) | `docker compose … ps` 에 4개 Up |
 | ① 안 기록 → 저장소 | 기록 실험 뒤 | `summary.md`·`rt_status.csv` 만 `docs/measurements/` 로 복사(MCAP 원본은 `build/`, 제외) | `record_*` 파일 |
 
-규칙 두 개: **커밋 주체는 ① 하나**(Pi 도 작업본도 push 하지 않는다 — 이력이 한 줄로 남고 자격 증명이 한 곳에만 있다). **숫자는 원본 파일과 함께**(`docs/measurements/README.md` 규칙).
+규칙 두 개: **커밋 주체는 ① 하나**(Pi 도 작업본도 서버도 push 하지 않는다 — 이력이 한 줄로 남고 자격 증명이 한 곳에만 있다). **숫자는 원본 파일과 함께**(`docs/measurements/README.md` 규칙).
 
 ## 3. ① 개발 PC — 무엇이 떠 있어야 하고, 무엇을 보고 판단하나
 
@@ -99,8 +119,9 @@ WSL 에서 나오는 **지연 수치는 전부 참고값**이다(가상 커널).
 | 클럭 고정 | `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor` | `performance` | `echo performance \| sudo tee …/scaling_governor` |
 | 열·스로틀 | `cat /sys/class/thermal/thermal_zone0/temp; cat /sys/devices/platform/soc/soc:firmware/get_throttled` | 시작 50 °C 아래, 플래그 `0` | 식힌다. 플래그가 0 이 아니면 그 측정은 버린다(`GLOSSARY.md` "스로틀") |
 | 측정 결과의 판단 | 각 스크립트 끝의 `temp: a -> b mC \| throttled: 0` | 0 | 0 아니면 재측정 |
+| 에이전트 서비스 (11/10~) | `systemctl --user is-active rt-pi-agent` | `active` | `journalctl --user -u rt-pi-agent -n 20 --no-pager` |
 
-Pi 는 측정 외의 일을 하지 않는다(ROS 2·Docker 없음). 자세한 순서는 `SETUP_RT_MEASURE.md`, 결과 해석은 `experiments/E18.md`·`E19a~d.md`.
+11/10 부터 Pi 에는 **에이전트 서비스 하나**(`rt-pi-agent` — 텔레메트리 1 Hz, 자율 업데이트)가 항상 돈다. ROS 2·Docker 는 여전히 없다. 표① 의 값(11/04~05)은 이 서비스가 없던 때에 쟀다. 그래서 **표① 을 다시 잴 때는 서비스를 멈추고 잰다** — `systemctl --user stop rt-pi-agent` → 측정 → `systemctl --user start rt-pi-agent`. 격리한 코어(3번)에는 일반 프로세스가 배정되지 않으므로 서비스는 0~2번 코어에서 돌지만, 서비스가 측정에 주는 영향은 재 보지 않았다 — 재지 않은 것을 "없다"고 쓰지 않고 조건을 같게 맞춘다. 멈춘 동안은 서버의 연속 기록에 공백이 생기므로 그 시각과 이유를 `LOG.md` 에 적는다. 자세한 순서는 `SETUP_RT_MEASURE.md`, 결과 해석은 `experiments/E18.md`·`E19a~d.md`, 서비스 설치는 `deploy/ec2/README.md` 4절.
 
 ## 5. ③ GitHub Actions(CI) — 환경, 필요성, 동작, 판단
 
@@ -108,7 +129,7 @@ Pi 는 측정 외의 일을 하지 않는다(ROS 2·Docker 없음). 자세한 �
 push 하면 GitHub 가 자기 데이터센터에 **리눅스 가상 머신(러너, `ubuntu-24.04`)을 새로 켜서** 저장소를 받아 `.github/workflows/ci.yml` 대로 실행하고 끈다. 공개 저장소는 무료. 노트북을 꺼도 돈다. 러너는 매번 백지라 의존성은 step 에서 다시 깐다(`apt-get install`, `get_mujoco.sh`, `pip install`).
 
 ### 5-2. 왜 필요한가
-- "내 PC 에서는 됐다"를 **남의 깨끗한 컴퓨터에서 다시 증명**한다. 실제로 CI 만 잡은 문제가 둘 있다(5-5).
+- "내 PC 에서는 됐다"를 **남의 깨끗한 컴퓨터에서 다시 증명**한다. 실제로 CI 만 잡은 문제가 셋 있다(5-5).
 - 포트폴리오를 보는 사람이 코드를 안 돌려 봐도 **초록 배지 하나로** "빌드되고 테스트가 통과한다"를 안다.
 - 문서 커밋 하나라도 push 마다 전부 다시 돈다 → 어느 커밋에서 깨졌는지 커밋 단위로 찾힌다.
 
@@ -118,15 +139,15 @@ push 하면 GitHub 가 자기 데이터센터에 **리눅스 가상 머신(러�
 ```mermaid
 flowchart LR
   P["git push"] --> R1
-  subgraph R1["잡 rt_core (러너 VM 1, 약 1분 10초)"]
+  subgraph R1["잡 rt_core (러너 VM 1, 약 35초)"]
     direction TB
     a1["apt: cmake g++ python3"] --> a2["cmake 빌드 rt_core"] --> a3["ctest 4: 링 버퍼 · 제어 단계 · 상태 머신 · 1 kHz 2초 드롭 0"]
     a3 --> a4["jitter_bench --no-rt 2초 → JSON → make_table1 (표① 생성기 동작 확인)"]
-    a4 --> a5["fleet 단위 테스트 4파일 30건 (가짜 브로커·DB)"] --> a6["대시보드 JSON 생성·파싱"] --> a7["아티팩트 jitter-ci"]
+    a4 --> a5["fleet 단위 테스트 4파일 26건 (가짜 브로커·DB)"] --> a6["대시보드 JSON 생성·파싱"] --> a7["아티팩트 jitter-ci"]
   end
   R1 -- needs --> R2
   R1 -- needs --> R3
-  subgraph R2["잡 fleet_integration (러너 VM 2, 약 2분)"]
+  subgraph R2["잡 fleet_integration (러너 VM 2, 약 2분 30초)"]
     direction TB
     b1["pip install"] --> b2["docker compose up mqtt db → migrate.py --wait 120"]
     b2 --> b3["수집기(QoS 1) + 가상 장치 10대 2 Hz (A/B 슬롯)"] --> b4["장애 주입 broker·db·collector 5초 + 나쁜 펌웨어 + 정상 OTA(흉내)"]
@@ -143,6 +164,8 @@ flowchart LR
 ```
 
 `needs: rt_core` 때문에 1단계가 실패하면 2단계 둘은 돌지 않는다(싼 검사부터, 비싼 검사는 그 뒤).
+
+잡 시간은 11/11 의 run 두 번에서 본 값이다 — `rt_core` 34초·37초, `fleet_integration` 2분 25초·2분 34초(작성자가 `gh run view` 로 본 값, `LOG.md` 11/11). `mujoco` 의 45초는 11/05 무렵의 값 그대로다(다시 보지 않았다). 러너는 매번 새 VM 이라 설치 시간에 따라 몇 초~수십 초씩 달라진다 — 이 시간은 "얼마나 기다리면 되나"의 어림이지 성능 수치가 아니다.
 
 ### 5-4. 결과를 보고 무엇을 판단하나
 | 보는 곳 | 명령/위치 | 판단 |
@@ -219,9 +242,12 @@ flowchart LR
 |---|---|---|---|
 | C++ 단위(ctest) | `rt_control/rt_core/test/test_spsc_ring.cpp` · `test_control_step.cpp` · `test_state_machine.cpp` · jitter_smoke | 4 | rt_core |
 | C++ MuJoCo | `test/test_mujoco_backend.cpp` | 1 (2,000주기 + 비용 p99 < 900 us) | mujoco |
-| Python 단위(가짜 브로커·DB) | `fleet/tests/test_fleet_logic.py` · `test_ota_rollout.py` · `test_ota_artifact.py` · `test_collector_resilience.py` | 9(왕복 시간 도구·Nagle 모형·pi_agent SIGTERM 포함) + 3 + 11(상대 경로 슬롯·거부 뒤 롤백 포함) + 7(main 스모크·꺼진 장치 last_seen 포함) = 30 | rt_core |
-| 통합(진짜 컨테이너) | `fleet/tests/integration.sh` + `fleet/chaos/assert_results.py` | 장애 3종 + 나쁜 펌웨어 롤백 + 정상 OTA 판정 | fleet_integration |
+| Python 단위(가짜 브로커·DB) | `fleet/tests/test_fleet_logic.py` · `test_ota_rollout.py` · `test_ota_artifact.py` · `test_collector_resilience.py` | 9(왕복 시간 도구·Nagle 모형·pi_agent SIGTERM 포함) + 3 + 7(상대 경로 슬롯·거부 뒤 롤백 포함 — 함수 7개 안에 확인 11가지) + 7(main 스모크·꺼진 장치 last_seen 포함) = **26** | rt_core |
+| 통합(진짜 컨테이너) | `fleet/tests/integration.sh` + `fleet/chaos/assert_results.py` | 장애 3종 + 나쁜 펌웨어 롤백 + 정상 OTA + 산출물 OTA 둘(4b 정상 10/10 · 4c 깨진 패키지 거부) 판정 | fleet_integration |
+| 릴리스 카나리(진짜 브로커, 태그 때만) | `fleet/tests/release_canary.sh` + 같은 `assert_results.py` | 가상 50대 단계 배포 + 깨진 패키지 롤백 | `release.yml` 의 canary |
 | 연기(smoke) | `jitter_bench --no-rt 2초`, 대시보드 JSON | 2 | rt_core |
+
+**세는 법(11/11 에 정함)**: "테스트 N건"은 **테스트 함수의 수**다 — C++ 는 `ctest` 에 등록된 것 5(위 4 + MuJoCo 1), Python 은 `grep -c '^def test_' fleet/tests/test_*.py` → 9 · 3 · 7 · 7 = 26, 합쳐 **31건**. 한 함수가 여러 가지를 확인하면 그것은 "확인 가지"로 따로 적는다. 11/10~11 의 문서 몇 곳이 `test_ota_artifact` 를 확인 가지 수(11)로 세어 Python 30 이라고 적었다 — 같은 테스트를 두 가지 단위로 센 것이라 고쳤다(`DECISIONS.md` 11/11).
 
 ## 6. ④ 작성 보조 작업본 — 무엇을 믿고 무엇을 믿지 않나
 - 있는 것: gcc·cmake·python, 저장소 전체, GitHub **읽기** 접근. 없는 것: ROS 2·Docker·MuJoCo·네트워크 일반.
@@ -233,7 +259,8 @@ flowchart LR
 2. `gh run list -L 1` — 마지막 push 가 ✓ 인가. ✗ 면 5-4 의 표대로 먼저 고친다.
 3. 관제를 띄운 날이면 수집기 한 줄(`online=50 backlog=0 db_err=0`)과 Grafana 를 한 번 본다.
 4. Pi 를 쓴 날이면 결과를 scp 하고 커밋했나, Pi 의 `.meta` 에 `throttled_after=0` 인가.
+5. (11/10~) 서버의 Grafana 장치 목록에 `pi-rt` 가 `ok` 인가 — 서버(⑤)와 Pi 의 서비스가 둘 다 살아 있다는 한 줄 확인. 숫자가 필요하면 `deploy/ec2/soak_report.sh`.
 
 ## 8. 어디에 더 적혀 있나
-- 소프트웨어 구조: `ARCHITECTURE.md` · 설치: `SETUP_WSL.md`(①), `SETUP_RT_MEASURE.md`(②) · CI 정의: `.github/workflows/ci.yml`(머리말 주석이 잡 3개의 뜻) · 통합 테스트: `fleet/tests/integration.sh`
+- 소프트웨어 구조: `ARCHITECTURE.md` · 설치: `SETUP_WSL.md`(①), `SETUP_RT_MEASURE.md`(②) · CI 정의: `.github/workflows/ci.yml`(머리말 주석이 잡 3개의 뜻) · 릴리스: `.github/workflows/release.yml`, `RELEASE.md` · 통합 테스트: `fleet/tests/integration.sh` · 서버(⑤): `deploy/ec2/README.md`
 - 실험과 판단: `EXPERIMENTS.md`(순서도·표), `experiments/`(장별) · 깨진 것: `LOG.md` · 결정: `DECISIONS.md` · 용어: `GLOSSARY.md`("CI", "스로틀", "IPI", "PREEMPT_RT")

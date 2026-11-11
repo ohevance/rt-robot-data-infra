@@ -1,0 +1,16 @@
+sequenceDiagram
+  participant S as rollout.py (서버)
+  participant B as 브로커
+  participant D as 장치 3대 (5% 단계)
+  participant R as 나머지 47대
+  S->>B: 텔레메트리 3초 듣기 → 살아 있는 50대
+  S->>D: cmd ota {version 1.2.0-bad, apply_s 1, bad true}
+  D->>B: telemetry state=updating
+  Note over D: apply_s 1초 → fw_version 교체 → state=fault
+  D->>B: telemetry fw=1.2.0-bad, state=fault
+  S->>S: 적용 대기 → 전원 적용 1.6초
+  S->>S: 헬스 게이트 3초 → 비정상 3/3 > 허용 0
+  S->>D: cmd ota_rollback
+  D->>B: telemetry fw=1.0.0, state=ok
+  S->>S: 롤백 완료 0.8~1.0초 → 중단
+  Note over R: 47대는 명령을 받은 적이 없다
