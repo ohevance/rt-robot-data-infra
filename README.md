@@ -42,6 +42,8 @@ ROS 2 / PREEMPT_RT / DDS / 장치 텔레메트리 관제 / OTA / 장애 복구 /
 | 같은 장애 4종을 GitHub 러너에서 (10대 2 Hz) | 유실 0·0·0, 롤백 0.4초 | CI `fleet_integration` 1m52s | `table3_ci.md` |
 | **진짜 산출물 OTA** 50대(릴리스 카나리): 단계별 적용 완료 5 / 50 / 100 %, 전체 · 깨진 패키지 | **1.2 / 2.0 / 2.2 s, 14.41 s**(헬스 대기 3 s × 3 포함) · **3/50 에서 거부 → 롤백 1.0 s** · 태그 → 게시 1분 52초 | GitHub 러너, 진짜 Mosquitto, 첫 태그 `v0.9.0-rc1`(11/11). 샌드박스(가짜 브로커)는 0.6 / 1.0 / 1.2 s · 롤백 0.2 s | `ota_release_v0.9.0-rc1_*.json`, E22 |
 | **실물 Pi → 클라우드 서버 연속 보고**(1 Hz, TLS + 비밀번호): 보낸 수 / 받은 수 / 유실 | **53,167 / 53,167 / 0** (14.77 시간, 재시작 0, 서버가 못 받은 최장 1.6 s, 수집기 재시작 1회 포함) | Pi 4(집 Wi-Fi, RT 커널) → **서버: 시드니**(EC2 t3.small), 11/10 18:37 ~ 11/11 09:23 | `soak_pi-rt_20261111T0023Z.json`, `deploy/ec2/soak_report.sh` |
+| **Pi ↔ 클라우드 브로커 MQTT 왕복**(TLS + 비밀번호, 1초 간격) · 접속 한 번 | **p50 290 / p95 291 ms**(60회, 최대 383) · 접속 1.2~1.5 s | Pi 4(집 Wi-Fi) → **서버: 시드니**. 0.2초 간격으로 재면 548~707 ms 로 보인다(Nagle — 재는 방법이 만든 값, E23) | `rtt_pi_sydney_20261111T0041Z_A_interval1.00.json`, E23 |
+| **실물 Pi 가 Release 를 받아 설치**(GitHub → sha256 → A/B 슬롯 → 자가 점검 → 전환) | **한 번 0.98 ~ 1.62 s**, 그중 자가 점검 0.67 s · 드롭 0/500 | Pi 4, RT 커널, 러너(arm)가 만든 `v0.9.0-rc1` aarch64 패키지 21.7 KB, 3회 | `install_pi4_once_v0.9.0-rc1.json`, E22 |
 | 큐 상한을 넘겼을 때 (실험) | 7.5분 공백 중 마지막 49초분 2,450개 유실 | WSL2 | `docs/LOG.md` 11/04 |
 
 실시간 **지연의 진짜 값**은 Raspberry Pi 4 + PREEMPT_RT 실측(위 Pi 줄들)이다. 한 변수씩 바꾼 사슬(커널 → 고정 → 격리)과 그 이유는 [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) 의 순서도, 각 실험의 상세는 [`docs/experiments/`](docs/experiments/README.md). WSL 값은 "코드가 돌아간다 + 상대 비교"의 증거다.

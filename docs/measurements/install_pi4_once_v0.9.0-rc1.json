@@ -1,0 +1,64 @@
+{
+  "what": "실물 Pi 4 가 Release v0.9.0-rc1 을 GitHub 에서 받아 설치한 시간 — pi_agent.py --once 의 출력에서 전사 (시험용 슬롯 ~/rt-slots-test, 매번 지우고 다시)",
+  "device": "Raspberry Pi 4B, Ubuntu 24.04, 커널 6.8.0-2054-raspi-realtime, 집 Wi-Fi",
+  "package": {
+    "file": "rt-robot-data-infra-0.9.0-rc1-aarch64.tar.gz",
+    "bytes": 21734,
+    "sha256": "78bc27d38c51bcc7db8b458ce6c45f7877e2cb7641ae24314c9195e00a8a01bc",
+    "built_on": "GitHub 러너 ubuntu-24.04-arm (run 42927560505)"
+  },
+  "binary": "ELF 64-bit LSB pie executable, ARM aarch64, dynamically linked (file 명령 출력)",
+  "runs": [
+    {
+      "n": 0,
+      "when_kst": "2026-11-11 09:21",
+      "installed": true,
+      "stage": "switched",
+      "note": "첫 설치 — 단계별 시간을 찍기 전의 코드. 자가 점검 결과는 selftest_pi4_v0.9.0-rc1.json"
+    },
+    {
+      "n": 1,
+      "when_kst": "2026-11-11 09:46 무렵",
+      "installed": true,
+      "stage": "switched",
+      "total_s": 1.62,
+      "took_s": {
+        "download": 0.426,
+        "verify": 0.001,
+        "extract": 0.029,
+        "selftest": 0.678,
+        "switch": 0.0,
+        "post_switch": 0.009
+      }
+    },
+    {
+      "n": 2,
+      "installed": true,
+      "stage": "switched",
+      "total_s": 1.009,
+      "took_s": {
+        "download": 0.117,
+        "verify": 0.001,
+        "extract": 0.026,
+        "selftest": 0.674,
+        "switch": 0.0,
+        "post_switch": 0.009
+      }
+    },
+    {
+      "n": 3,
+      "installed": true,
+      "stage": "switched",
+      "total_s": 0.983,
+      "took_s": {
+        "download": 0.09,
+        "verify": 0.001,
+        "extract": 0.027,
+        "selftest": 0.674,
+        "switch": 0.0,
+        "post_switch": 0.009
+      }
+    }
+  ],
+  "reading": "total_s 는 매니페스트 읽기(GitHub 에 한 번 더 다녀온다)를 포함한다: 전체 − 단계 합 = 0.477 / 0.182 / 0.182 초. 첫 회가 느린 것은 내려받기·매니페스트 모두 처음 접속이기 때문으로 본다(추정)"
+}

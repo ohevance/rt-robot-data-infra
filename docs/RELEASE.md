@@ -160,7 +160,9 @@ systemctl --user daemon-reload && systemctl --user enable --now rt-pi-agent && s
 | 깨진 패키지 | **3/50** 에서 자가 점검이 거부(0.6 s) → 롤백 **1.0 s** |
 | 산출물 | aarch64 21,734 B · x86_64 21,450 B, 사전 릴리스(태그에 `-`) — 실물의 자율 업데이트(`latest`)에는 잡히지 않는다 |
 
-적용·롤백 시간에는 "장치의 다음 보고(1 Hz)까지 최대 1초"가 들어 있다(E22 4절). 원본은 Release 자산을 그대로 옮긴 `docs/measurements/ota_release_v0.9.0-rc1_{good,bad}.json` · `manifest_v0.9.0-rc1.json`.
+적용·롤백 시간에는 "장치의 다음 보고(1 Hz)까지 최대 1초"가 들어 있다(E22 4절).
+
+**실물 Pi 가 같은 Release 를 받아 설치(11/11, 시험용 슬롯, 4회)**: 한 번에 **0.98 ~ 1.62초** — 매니페스트 읽기 0.18~0.48 + 내려받기 0.09~0.43 + 해시 검증 0.001 + 풀기 0.03 + **자가 점검 0.67** + 링크 전환 0.001 미만 + 훅 0.009. 러너(ubuntu-24.04-arm)가 만든 aarch64 바이너리가 Pi 4 의 RT 커널에서 500주기 드롭 0 으로 자가 점검을 통과했다. 돌고 있는 서비스와 연속 기록은 건드리지 않았다(`install_pi4_once_v0.9.0-rc1.json`). 원본은 Release 자산을 그대로 옮긴 `docs/measurements/ota_release_v0.9.0-rc1_{good,bad}.json` · `manifest_v0.9.0-rc1.json`.
 
 ## 8. 파일
 
