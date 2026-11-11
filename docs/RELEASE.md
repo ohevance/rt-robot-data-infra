@@ -7,7 +7,7 @@
 ## 1. 전체 그림 — 어디서 무엇이 도는가
 
 ```
-[노트북/WSL]  코드 → git push ──▶ [GitHub Actions: ci.yml]  빌드 · 테스트 31건(C++ 5 + Python 26) · 컨테이너 통합(산출물 OTA 포함) · MuJoCo 2모델
+[노트북/WSL]  코드 → git push ──▶ [GitHub Actions: ci.yml]  빌드 · 테스트 37건(C++ 7 + Python 30) · ZeroMQ 끝-대-끝 · 컨테이너 통합(산출물 OTA 포함) · MuJoCo 2모델
               git tag v1.2.0 ─▶ [GitHub Actions: release.yml]
                                    package(x86_64)  ┐  빌드 → ctest → tar.gz + sha256 + manifest.<arch>.json (+ 깨진 패키지)
                                    package(aarch64) ┘

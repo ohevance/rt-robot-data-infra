@@ -245,7 +245,7 @@ flowchart LR
 | Python 단위(가짜 브로커·DB) | `fleet/tests/test_fleet_logic.py` · `test_ota_rollout.py` · `test_ota_artifact.py` · `test_collector_resilience.py` | 9(왕복 시간 도구·Nagle 모형·pi_agent SIGTERM 포함) + 3 + 7(상대 경로 슬롯·거부 뒤 롤백 포함 — 함수 7개 안에 확인 11가지) + 7(main 스모크·꺼진 장치 last_seen 포함) = **26** | rt_core |
 | 통합(진짜 컨테이너) | `fleet/tests/integration.sh` + `fleet/chaos/assert_results.py` | 장애 3종 + 나쁜 펌웨어 롤백 + 정상 OTA + 산출물 OTA 둘(4b 정상 10/10 · 4c 깨진 패키지 거부) 판정 | fleet_integration |
 | Python 단위(SDK 패킷, pyzmq 없이) | `sdk/python/tests/test_wire.py` | 4 (C++ 시험과 같은 골든 바이트) | rt_core |
-| 끝-대-끝(진짜 ZeroMQ 노드, 11/11) | `sdk/python/tests/test_zmq_node.py` | 추종 · cmd_seq · 워치독 · 복구 · 나쁜 패킷 넷 · 공유 메모리 · 종료 | rt_core |
+| 끝-대-끝(진짜 ZeroMQ 노드, 11/11) | `sdk/python/tests/test_zmq_node.py` | 12단계: 추종 · cmd_seq · 워치독 · 복구 · 나쁜 패킷 넷 · 공유 메모리 · 클라이언트 둘 · 느린 구독자 · 종료 · 다시 연결 · 우편함 가득 참(뒤의 넷은 11/11 밤) | rt_core |
 | 릴리스 카나리(진짜 브로커, 태그 때만) | `fleet/tests/release_canary.sh` + 같은 `assert_results.py` | 가상 50대 단계 배포 + 깨진 패키지 롤백 | `release.yml` 의 canary |
 | 연기(smoke) | `jitter_bench --no-rt 2초`, 대시보드 JSON | 2 | rt_core |
 

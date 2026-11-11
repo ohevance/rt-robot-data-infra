@@ -133,7 +133,7 @@ struct NodeCounters {
   std::uint64_t pings = 0;
   std::uint64_t infos = 0;
   std::atomic<std::uint64_t> states_sent{0};
-  std::atomic<std::uint64_t> states_send_dropped{0};  // PUB 가 받지 않음 (EAGAIN — 구독자가 밀려 높은 물 표시에 닿음)
+  std::atomic<std::uint64_t> states_send_dropped{0};  // zmq_send 실패 수. 구독자별 넘침은 안 잡힌다 — PUB 는 그 몫을 조용히 버리고 성공을 돌려준다 (E24)
   std::atomic<std::uint64_t> shm_writes{0};
   std::atomic<std::int64_t> wake_max_ns{0};
   std::atomic<std::uint64_t> wake_over_period{0};     // 깨어남 지연이 한 주기를 넘은 횟수

@@ -74,7 +74,7 @@ def slides():
                        ["8 상태 발행", "rt_control_node.cpp:205-230 rt_thread_main() · publish_state() · :233-291 publish_status()", "벨트(링 2048)를 비워 /joint_states 100 Hz, rt_status 1 Hz", "기록 요약의 실제 Hz (단계 9)", "{{first:단계 8 들머리}}"],
                        ["9 기록", "data_pipeline/record.sh · data_pipeline/bag_to_csv.py:31 open_bag · :43 read_messages · :57/:82 write_*_csv · :110 rate_and_gaps · :127 tracking_error · :157 write_summary", "rosbag2 MCAP 30초 → CSV 3개 → summary.md", "E20 (단계 9 장표 자체)", "{{first:단계 9 들머리}}"],
                        ["10 관제로", "fleet/agent/ros_status_bridge.py (123줄, DeviceAgent 재사용)", "rt_status 를 51번째 장치로 MQTT 에 → 2부 데이터의 길", "표③ → 장표 {{first:2부 ⑦⑧ 검증}}~", "{{first:단계 10 들머리}}"]],
-              "foot": "경로는 저장소 뿌리 기준(rt_control/rt_core/…). 줄 번호는 2026-11-11 main. 코드 장표마다 상자 위에 같은 '파일:줄' 이 적혀 있다. 전체 읽기 순서(28항목)는 docs/READING_GUIDE.md"})
+              "foot": "경로는 저장소 뿌리 기준(rt_control/rt_core/…). 줄 번호는 2026-11-11 main. 코드 장표마다 상자 위에 같은 '파일:줄' 이 적혀 있다. 전체 읽기 순서(29항목)는 docs/READING_GUIDE.md"})
     s.append({"kind": "image", "section": SEC3, "title": "노드 안의 '두 세계' — 일반 스레드(ROS 2 실행기)와 RT 스레드(1 kHz), 그 사이는 링 버퍼 세 개뿐", "image": "img/node_threads.png",
               "caption": "왼쪽 = ROS 2 실행기 스레드(일반 우선순위): on_command · publish_state 100 Hz · publish_status 1 Hz. 오른쪽 = RT 스레드(SCHED_FIFO 80, 1 kHz): RtLoop::run → ControlStep::step → Backend. 두 세계를 잇는 것은 g_cmd_ring(64) · g_state_ring(2048) · g_timing_ring(65536) — 전부 락 없는 SPSC 링. 단계 3·4·5·8 이 이 그림의 상자들이다. 출처: rt_control/ros2_adapter/src/rt_control_node.cpp 머리말"})
     # ---- 단계 1 ----

@@ -20,8 +20,8 @@ def slides():
               "subtitle": "숫자를 만드는 스크립트는 조건(커널·부하·온도)을 같이 적고, 테스트와 CI 러너는 push 마다 다시 증명한다",
               "flow": {"from": "로봇을 움직이는 길(1부)·데이터의 길(2부)의 숫자 — 표① 189 us, 표② 손실 0, 표③ 유실 0 / 롤백 1.0초, 물리 0.9% — 와 그 검증(3부), 공고 표(4부), 환경(5부)",
                        "question": "이 숫자들을 어떻게 믿나 — 누가, 무엇으로, 언제 다시 재나?",
-                       "answer": "측정 스크립트 5개가 조건(커널·부하 크기·온도·스로틀)을 결과 옆에 적는다 · 테스트 31건(C++ 5 · Python 26)과 통합 스크립트 · CI 3잡이 매 push 마다 1 kHz 루프·물리·장애 3종·롤백·진짜 설치를 다시 돌린다 — 그리고 실제로 세 번 나를 잡았다"},
-              "agenda": ["측정: 표① 한 줄이 만들어지는 길(스크립트 5개) · 온도·부하 함수", "테스트: 목록 31건 · 가짜 브로커·DB · 통합 스크립트", "CI: 3잡 · 결과를 보고 무엇을 판단하나 · Jenkins 대응표 (태그 때 도는 릴리스 워크플로는 7부 덧붙임)", "→ 다음 질문: 왜 이렇게 만들었고(버린 대안), 무엇이 깨졌고, 어떻게 일했나? (7부)"]})
+                       "answer": "측정 스크립트 5개가 조건(커널·부하 크기·온도·스로틀)을 결과 옆에 적는다 · 테스트 37건(C++ 7 · Python 30)과 끝-대-끝 스크립트 · CI 3잡이 매 push 마다 1 kHz 루프·물리·장애 3종·롤백·진짜 설치를 다시 돌린다 — 그리고 실제로 세 번 나를 잡았다"},
+              "agenda": ["측정: 표① 한 줄이 만들어지는 길(스크립트 5개) · 온도·부하 함수", "테스트: 목록 37건 · 가짜 브로커·DB · 통합 스크립트", "CI: 3잡 · 결과를 보고 무엇을 판단하나 · Jenkins 대응표 (태그 때 도는 릴리스 워크플로는 7부 덧붙임)", "→ 다음 질문: 왜 이렇게 만들었고(버린 대안), 무엇이 깨졌고, 어떻게 일했나? (7부)"]})
     s.append({"kind": "process", "section": SEC5, "title": "표① 한 줄이 만들어지는 길 — 스크립트 다섯 개 (조건을 결과 옆에 적는다)", "crumb": "6부 믿을 수 있나 · 측정 스크립트 5개",
               "steps": [
                   {"head": "jitter_run.sh", "lines": ["<label> <초> [stress] [cpu]", "온도 읽기 → (부하 시작) → jitter_bench → .meta(커널·RT·부하·vm·prio·work·온도 전후·스로틀)", "환경 변수: JITTER_PRIO · JITTER_WORK_US · STRESS_VM_BYTES(256M)"]},
@@ -37,17 +37,18 @@ def slides():
     s.append({"kind": "code", "section": SEC5, "title": "lib_stress.sh — 부하 정의는 한 곳에: start_stress · stop_stress", "file": ref(LS, 21, 38), "crumb": "6부 믿을 수 있나 · 측정 — 부하 함수",
               "code": code(LS, 21, 38), "codeSize": 11.5,
               "points": ["start_stress <초> <vm>: stress-ng --cpu N(코어 수) --io 2 --vm 1 --vm-bytes <vm> --timeout <초> 를 뒤에서 돌리고 PID 를 STRESS_PID 에 둔다. sleep 3 은 작업자가 다 뜰 때까지(측정 첫 1~2초가 '아직 한가'로 섞이지 않게). stop_stress 는 그 PID 를 wait", "--vm-bytes 가 왜 중요한가: 메모리를 건드리는 부하가 클수록 CPU 간 인터럽트(IPI, TLB 비우기)가 잦아져 격리된 CPU 도 맞는다 → 같은 'stress' 라도 vm 크기가 다르면 다른 실험", "부하를 한 함수로 묶은 이유: E19-d 에서 두 스크립트의 vm 크기(cyclictest_run 512M vs jitter_run 256M)가 달라 도구 비교가 흐려졌다 → 쓴 값은 .meta 의 stress_vm_bytes 에(DECISIONS 11/05)", "stress-ng 가 없으면 바로 실패한다 — 조용히 '부하 없이' 재는 일이 없게"],
-              "next": "테스트 — 측정은 '조건을 적는다'로 믿게 했다. 코드 논리는 무엇이 지키나? (테스트 31건, 가짜 → 진짜)"})
-    s.append({"kind": "table", "section": SEC5, "title": "테스트 목록 — '테스트 케이스 등록'은 따로 없다, 전부 저장소의 코드이고 CI 가 push 마다 돌린다", "fontSize": 10, "crumb": "6부 믿을 수 있나 · 테스트 목록 31건",
-              "colW": [2.0, 3.9, 4.9, 1.5],
+              "next": "테스트 — 측정은 '조건을 적는다'로 믿게 했다. 코드 논리는 무엇이 지키나? (테스트 37건, 가짜 → 진짜)"})
+    s.append({"kind": "table", "section": SEC5, "title": "테스트 목록 — '테스트 케이스 등록'은 따로 없다, 전부 저장소의 코드이고 CI 가 push 마다 돌린다", "fontSize": 9, "crumb": "6부 믿을 수 있나 · 테스트 목록 37건",
+              "colW": [1.8, 3.4, 5.6, 1.5],
               "rows": [["묶음", "파일", "케이스", "CI 잡"],
-                       ["C++ 단위 (ctest)", "rt_control/rt_core/test/test_spsc_ring.cpp · test_control_step.cpp · test_state_machine.cpp · jitter_smoke", "4 — 링 버퍼(두 스레드, 역전 없음·드롭 허용) · 제어 단계(최신 명령·워치독·변화량 제한) · 상태 머신(전이·불법 거부) · 1 kHz 2초 드롭 0", "rt_core"],
+                       ["C++ 단위 (ctest)", "rt_control/rt_core/test/test_spsc_ring.cpp · test_control_step.cpp · test_state_machine.cpp · test_wire.cpp · test_shm_seqlock.cpp(11/11) · jitter_smoke", "6 — 링 버퍼(두 스레드, 역전 없음·드롭 허용) · 제어 단계(최신 명령·워치독·변화량 제한) · 상태 머신(전이·불법 거부) · 통신 패킷(왕복·골든 바이트·거절 9가지) · 공유 메모리 seqlock(섞인 읽기 0, 프로세스 사이) · 1 kHz 2초 드롭 0", "rt_core"],
                        ["C++ MuJoCo", "rt_control/rt_core/test/test_mujoco_backend.cpp", "1 (× 2 모델) — SO-ARM100 1 kHz 2,000주기 · ALLEX 48 자유도 500 Hz 1,000주기(같은 바이너리, 환경변수로 관절·주기): 움직임 + 비용 p99 < 주기의 90% → mujoco_backend_ci.json · _allex_ci.json", "mujoco"],
                        ["Python 단위 (가짜 브로커·DB)", "fleet/tests/test_fleet_logic.py · test_ota_rollout.py · test_collector_resilience.py · test_ota_artifact.py(11/10)", "9 + 3 + 7 + 7 = 26 — 에이전트 버퍼·재전송·유언·OTA · 왕복 측정기 · Nagle 모형 · 종료 신호 / 배포 good·bad·timeout / 수집기 DB 중단·복귀 · backlog 상한 · 지속 세션 · 종료 flush · 옛 스키마 · 꺼진 장치의 last_seen · main() 스모크 / 진짜 설치(가짜 브로커 + 진짜 패키지): 상대 경로 슬롯 · 설치 단위 · 함대 정상 · 깨진 패키지 · 거부 뒤 롤백 · 자율 업데이트 · 아키텍처와 훅", "rt_core"],
+                       ["Python 단위 (SDK 패킷) · 끝-대-끝 (11/11)", "sdk/python/tests/test_wire.py · test_zmq_node.py", "4 (C++ 과 같은 골든 바이트) · 진짜 ZeroMQ 노드를 띄운 끝-대-끝 12단계: 추종 · cmd_seq · 워치독 · 복구 · 나쁜 패킷 넷 · 공유 메모리 · 클라이언트 둘 · 느린 구독자 · 종료 · 다시 연결 · 우편함 가득 참", "rt_core"],
                        ["통합 (진짜 컨테이너)", "fleet/tests/integration.sh + fleet/chaos/assert_results.py", "장애 3종 + 나쁜 펌웨어 롤백 + 정상 OTA + 산출물 OTA 2종(4b 진짜 패키지 설치 · 4c 깨진 패키지 거부)의 판정 규칙", "fleet_integration"],
                        ["릴리스 카나리 (태그 때만)", "fleet/tests/release_canary.sh + assert_results.py", "진짜 Mosquitto + 가상 50대: 정상 패키지 5 → 50 → 100 % 설치, 깨진 패키지는 첫 단계 3대에서 거부·롤백 — 통과해야 게시된다", "release 워크플로의 canary"],
                        ["연기(CI 단계, ctest 밖)", "jitter_bench --no-rt 2초 → JSON → make_table1.py · 대시보드 JSON 생성 → 파싱", "2 — '돌아간다'의 증거(지연 수치 아님)", "rt_core"]],
-              "note": "결과는 Actions 잡 로그의 'OK: …' / '100% tests passed'. 케이스별 표(JUnit 리포트)는 없다(우선순위 낮음). 세는 법: 테스트 함수의 수 — grep -c '^def test_' fleet/tests/test_*.py → 9 · 3 · 7 · 7 (test_ota_artifact 는 함수 7개 안에 확인 11가지). 출처: docs/ENVIRONMENT.md §5-7"})
+              "note": "결과는 Actions 잡 로그의 'OK: …' / '100% tests passed'. 케이스별 표(JUnit 리포트)는 없다(우선순위 낮음). 세는 법: 테스트 함수의 수 — C++ 는 ctest 등록 6 + MuJoCo 1 = 7, Python 은 grep -c '^def test_' → fleet 9 · 3 · 7 · 7 + SDK 4 = 30 (test_ota_artifact 는 함수 7개 안에 확인 11가지). 합쳐 37건(11/11 낮에는 31건). 출처: docs/ENVIRONMENT.md §5-7"})
     s.append({"kind": "two_col", "section": SEC5, "title": "가짜 브로커·가짜 DB — 컨테이너 없이 몇 초 만에 도는 단위 테스트의 바닥", "crumb": "6부 믿을 수 있나 · 테스트 — 가짜 브로커·DB",
               "left": {"head": "fleet/tests/fake_mqtt.py (218줄)", "bullets": ["install(): paho.mqtt.client.Client 를 가짜 클래스로 바꿔치기 — 수집기·에이전트 코드는 자기가 가짜 위에 있는 줄 모른다", "FakeBroker: 토픽 와일드카드(+, #) 구독, 보관(retained) 메시지, publish 즉시 콜백 전달", "crash() / disconnect_all() / reconnect_all(): 브로커 죽음·재접속을 흉내 → 버퍼·재전송·유언 시험", "QoS 와 clean_session 인자를 기록해 '지속 세션으로 붙었나'를 검사할 수 있다"]},
               "right": {"head": "fleet/tests/fake_psycopg.py (120줄)", "bullets": ["connect/cursor/execute/copy 를 흉내. STORE 딕셔너리에 telemetry 행이 쌓인다", "FAIL 스위치: 'write' 를 켜면 COPY 가 예외 → backlog 경로, 'schema_old' 면 003 미적용 스키마 → check_schema False", "test_collector_resilience: DB 죽음 → backlog 에 남음 → 복귀 → 오래된 것부터 전부, 순서 유지 → 상한 넘기면 가장 오래된 묶음 버림", "11/05 추가: main() 한 바퀴 스모크 — 인자 → 잠금 → 시그널 핸들러 등록 → 루프 0바퀴 → shutdown (request_stop 누락을 잡는다)"]},
@@ -122,8 +123,8 @@ def slides():
               "subtitle": "왜 이렇게 만들었나(버린 대안 포함), 무엇이 깨졌고 어떻게 풀었나, 2주를 어떻게 썼나, 그리고 처음 읽는 사람을 위한 말",
               "flow": {"from": "코드 · 숫자 · 검증이 한 벌 (1~6부)",
                        "question": "왜 이렇게 만들었고, 무엇이 깨졌고, 어떻게 일했나?",
-                       "answer": "결정 중 핵심 25건(이유 + 버린 대안) · 사고 11건(원인 + 고친 것 + 배운 규칙) · 2주 일정과 그 뒤 · AI 와 일한 방식(작성자의 것 / AI 의 것 / 검증) · 남은 일 · 면접 한 문장 12개 · 용어 · 덧붙임 7장(본편 뒤에 한 일)"},
-              "agenda": ["결정 기록 3장(실시간 · 관제 · 측정·검증·범위)", "사고와 해결 2장 → 2주 일정 → 작성 방식(AI) → 남은 일 → 면접 한 문장 모음", "부록: 용어 2장", "덧붙임 7장: ALLEX(11/06) → 릴리스 → 배포 3장(그림 · 코드 · 숫자) → 클라우드 운영 층 → 사고와 해결 (3) → 왕복 290 ms(11/10~11)", "→ 끝: 결국 로봇은 이렇게 움직인다 (한 장 요약)"]})
+                       "answer": "결정 중 핵심 25건(이유 + 버린 대안) · 사고 11건(원인 + 고친 것 + 배운 규칙) · 2주 일정과 그 뒤 · AI 와 일한 방식(작성자의 것 / AI 의 것 / 검증) · 남은 일 · 면접 한 문장 12개 · 용어 · 덧붙임 9장(본편 뒤에 한 일)"},
+              "agenda": ["결정 기록 3장(실시간 · 관제 · 측정·검증·범위)", "사고와 해결 2장 → 2주 일정 → 작성 방식(AI) → 남은 일 → 면접 한 문장 모음", "부록: 용어 2장", "덧붙임 9장: ALLEX(11/06) → 릴리스 → 배포 3장(그림 · 코드 · 숫자) → 클라우드 운영 층 → 사고와 해결 (3) → 왕복 290 ms(11/10~11) → ZeroMQ 2장(그림 · 코드, 11/11 저녁)", "→ 끝: 결국 로봇은 이렇게 움직인다 (한 장 요약)"]})
     s.append({"kind": "table", "section": SEC6, "title": "결정 기록 (1/3) — 실시간 쪽: 왜 이렇게 만들었나", "fontSize": 10.5, "crumb": "7부 왜·사고·방식 · 결정 1/3 실시간",
               "colW": [3.0, 5.2, 4.1],
               "rows": [["결정 (날짜)", "이유", "버린 대안"],
@@ -160,7 +161,7 @@ def slides():
                        ["표①의 조건은 커널 × 부하 × 고정/격리 × 도구 × 시간 (11/05)", "줄 하나가 반박 하나를 막는다('일반이면?', '한가하면 다 그렇다', '측정기가 틀렸다', '스로틀')", "RT 부하 한 줄만"],
                        ["부하 정의는 lib_stress.sh 한 곳, 쓴 값은 .meta (11/05)", "도구 비교 중 vm 512M vs 256M 차이가 측정기 차이로 보였다", "스크립트마다 따로"],
                        ["6주 계획을 2주로 줄이며 뺀 것 (11/03)", "실물 서보 백엔드·중력 보상·TLS 인증·디스크 큐·수동 ACK — 자리와 문서만 남김(TLS + 비밀번호는 11/10 에 운영 설정으로 넣었다)", "전부 하기 — 기한 안에 아무것도 증명 못 함"]],
-              "note": "출처: docs/DECISIONS.md. 파일에는 전체 44건(11/11 기준 — 11/05 까지 28건, 그 뒤 16건은 7부 덧붙임 장표에서), 여기는 11/05 까지에서 면접에서 물을 만한 25건(세 장 8 + 9 + 8 행)",
+              "note": "출처: docs/DECISIONS.md. 파일에는 전체 46건(11/11 기준 — 11/05 까지 28건, 그 뒤 18건은 7부 덧붙임 장표에서), 여기는 11/05 까지에서 면접에서 물을 만한 25건(세 장 8 + 9 + 8 행)",
               "next": "사고와 해결 — 결정대로 만들었지만 전부 처음부터 돌지는 않았다. 무엇이 깨졌고, 왜, 어떻게 고쳤나? (11건)"})
     s.append({"kind": "table", "section": SEC6, "title": "사고와 해결 (1/2) — 깨진 것, 원인, 고친 것", "fontSize": 10.5, "crumb": "7부 왜·사고·방식 · 사고 1/2",
               "colW": [3.3, 4.4, 3.4, 1.2],
@@ -196,7 +197,7 @@ def slides():
               "foot": "D0~D4 는 날짜 표기가 '11/03 (D1)' 처럼 DECISIONS 의 꼬리표를 따른다(하루에 여러 D). 출처: docs/LOG.md, docs/HANDOVER.md",
               "next": "작성 방식 — 2주에 이만큼이 가능했던 이유와, 그래서 생기는 질문('AI 가 다 한 거 아냐?')에 대한 답"})
     s.append({"kind": "two_col", "section": SEC6, "title": "작성 방식 — AI(Claude)와 어떻게 일했나, 무엇이 작성자의 것인가", "crumb": "7부 왜·사고·방식 · AI 와 일한 방식",
-              "left": {"head": "작성자(오문규)가 한 것", "bullets": ["무엇을 만들지·범위·일정(6주 → 2주, 뺀 것), git 전환, Pi 구매·세팅 결정", "모든 실행과 측정: WSL 과 Pi 에서 명령을 치고 출력을 읽고 다음 질문을 정함(수십 회)", "판단: '왜 하는지와 결과 해석이 문서에 있어야 한다', '순서도에 기준이 있어야 논리가 선다', '측정 조건이 왜 이 조합인가', '녹화는 직접 치는 모습이어야', '장표도 순서도 논리로'", "검토: 읽기 가이드 28항목과 실험 페이지 24장을 교재로 분석 기간(5회차) + 혼자 하는 과제 3건(Co-Authored-By 없는 커밋)"]},
+              "left": {"head": "작성자(오문규)가 한 것", "bullets": ["무엇을 만들지·범위·일정(6주 → 2주, 뺀 것), git 전환, Pi 구매·세팅 결정", "모든 실행과 측정: WSL 과 Pi 에서 명령을 치고 출력을 읽고 다음 질문을 정함(수십 회)", "판단: '왜 하는지와 결과 해석이 문서에 있어야 한다', '순서도에 기준이 있어야 논리가 선다', '측정 조건이 왜 이 조합인가', '녹화는 직접 치는 모습이어야', '장표도 순서도 논리로'", "검토: 읽기 가이드 29항목과 실험 페이지 25장을 교재로 분석 기간(5회차) + 혼자 하는 과제 3건(Co-Authored-By 없는 커밋)"]},
               "right": {"head": "AI 가 한 것 · 어떻게 검증했나", "bullets": ["코드 초안·문서 초안·장표 초안. AI 가 쓴 커밋에 Co-Authored-By: Claude 표기(숨기지 않는다. 측정 결과·병합 커밋은 작성자 단독)", "AI 의 샌드박스에는 ROS 2·Docker·MuJoCo 가 없어 가짜 위에서 논리만 검증 → 진짜 첫 실행은 항상 작성자의 WSL/Pi/서버 — 그때 깨진 것 11건(11/10~11 에 9건 더)이 LOG 에", "CI 가 매 push 마다 3잡을 다시 돌린다(AI 도 작성자도 아닌 제3의 검사원)", "면접 한 문장: 'AI 를 코드 초안과 문서화에 썼고, 무엇을 만들지·무엇을 재고 어떻게 판단할지·결과가 맞는지는 제가 했습니다. 어느 파일이든 열어서 물어보셔도 됩니다'"]},
               "foot": "README '작성 방식' 문단, docs/HANDOVER.md §2. 회사가 AI 로 검증하면 1분 안에 보이는 것을 먼저 말하는 쪽이 신뢰를 얻는다",
               "next": "남은 일 — 지원(11/17)까지 무엇이 남았고, 면접에서 '다음 단계'로 말할 것은?"})
@@ -230,7 +231,7 @@ def slides():
                   "기록: '관제는 1 Hz 요약을 서버로, 기록은 100 Hz 원본을 로봇 안에 — 30초 기록에서 100.0 Hz·틈 0·처짐 1.1° 가 사람 손 없이 나온다.'",
                   "CI: '푸시마다 러너가 1 kHz 루프, 물리, 장애 3종과 롤백, 진짜 설치를 다시 돌린다 — 그리고 실제로 세 번 나를 잡았다.'",
               ],
-              "next": "부록 용어 2장 → 덧붙임 7장(11/06 ~ 11/11, 장표마다 면접 한 문장이 설명 문서에) → 끝: 결국 로봇은 이렇게 움직인다"})
+              "next": "부록 용어 2장 → 덧붙임 9장(11/06 ~ 11/11 저녁, 장표마다 면접 한 문장이 설명 문서에) → 끝: 결국 로봇은 이렇게 움직인다"})
     s.append({"kind": "cards", "section": SEC6, "title": "부록 · 용어 (1/2) — 실시간 쪽, 처음 읽는 사람을 위한 한 줄씩", "cols": 3, "crumb": "7부 부록 · 용어 1/2 실시간",
               "cards": [
                   {"icon": "RT", "head": "실시간 · PREEMPT_RT", "lines": ["실시간 = 빠른 게 아니라 '정해진 시간 안에 항상'", "PREEMPT_RT = 급한 스레드가 오면 커널이 하던 일을 중단하고 비켜 주는 리눅스 패치. /sys/kernel/realtime = 1"]},
@@ -263,6 +264,7 @@ def slides():
               "foot": "원본: docs/experiments/E21.md, docs/measurements/mujoco_backend_allex_{wsl_1khz, wsl_500hz, ci_1khz_run42172730308, ci_500hz_run42175845461}.json, docs/DECISIONS.md 11/06. 남은 것: 노드 안 work_us(500 Hz)·drop, 반복 측정",
               "next": "덧붙임 (11/10) — ALLEX 는 '로봇을 바꾸는 일'이었다. 다음은 '로봇의 소프트웨어를 바꾸는 일': 태그 하나로 빌드 · 검증 · 게시까지"})
     s.extend(addenda_1110())
+    s.extend(addenda_1111_evening())
 
     # ---------------- 끝 ----------------
     s.append({"kind": "section", "section": SEC7, "num": "끝", "title": "결국 로봇은 이렇게 움직인다",
@@ -286,7 +288,7 @@ def slides():
               ],
               "bottom": "이 한 줄기가 저장소의 전부다. 어느 상자에서든 멈춰 '이 숫자는 어디서 왔고, 코드는 어디에 있고, 왜 그렇게 했나'를 설명할 수 있어야 한다 — 그 답이 docs/experiments/, docs/DECISIONS.md, 그리고 장표마다 붙은 설명 문서에 있다"})
     s.append({"kind": "closing", "section": SEC7, "title": "rt-robot-data-infra — 코드와 숫자는 저장소에 있습니다",
-              "bullets": ["github.com/ohevance/rt-robot-data-infra — README 첫 표가 공고 ↔ 산출물 ↔ 숫자, 배지가 CI", "읽는 순서: docs/ENVIRONMENT.md → docs/READING_GUIDE.md(28항목) → docs/EXPERIMENTS.md(순서도) → docs/experiments/(24장) · 릴리스와 운영은 docs/RELEASE.md · deploy/ec2/README.md", "장표 설명 문서: docs/deck/notes/NNN.docx (장표 번호와 같다)", "작성: 오문규 · AI 보조(Claude, AI 가 쓴 커밋에 Co-Authored-By 표기) · 2026-11-03 ~ 11-11"]})
+              "bullets": ["github.com/ohevance/rt-robot-data-infra — README 첫 표가 공고 ↔ 산출물 ↔ 숫자, 배지가 CI", "읽는 순서: docs/ENVIRONMENT.md → docs/READING_GUIDE.md(29항목) → docs/EXPERIMENTS.md(순서도) → docs/experiments/(25장) · 릴리스와 운영은 docs/RELEASE.md · deploy/ec2/README.md", "장표 설명 문서: docs/deck/notes/NNN.docx (장표 번호와 같다)", "작성: 오문규 · AI 보조(Claude, AI 가 쓴 커밋에 Co-Authored-By 표기) · 2026-11-03 ~ 11-11"]})
     return s
 
 
@@ -386,5 +388,44 @@ def addenda_1110():
                   {"kind": "end", "text": "결정: 측정 간격은 왕복보다 길게(기본 1초)\n운영(1 Hz)은 무관 → NODELAY 는 지금 바꾸지 않는다", "fs": 9.5},
               ],
               "bottom": "읽는 법: 숫자가 다른 숫자와 다투면, 숫자를 고르기 전에 재는 방법을 의심한다. 모형이 첫 측정을 한 자리까지 맞혔어도 그것은 '설명'이지 '확인'이 아니다 — 재기 전에 예측을 적어 두니 맞은 것 셋과 틀린 것 하나가 갈렸다. 290 ms 는 모형이 아니라 1초 간격의 측정이 말한다. 출처: docs/experiments/E23.md, docs/measurements/rtt_pi_sydney_*.json(개별 값 포함), DECISIONS 11/11",
+              "next": "덧붙임 (11/11 저녁) — 지원 공고의 필수 역량 중 빈칸이던 ZeroMQ: 같은 RT 루프를 감싸면 명령이 돌아오기까지 몇 ms 인가?"})
+    return a
+
+
+def addenda_1111_evening():
+    """덧붙임 (11/11 저녁) 두 장 — 지원 공고(Framework S/W 엔지니어)의 필수 역량 중 빈칸이던 ZeroMQ.
+    순서도 논리: 같은 RT 루프를 다른 미들웨어로 감싸면(그림 + 숫자, 11/11 밤의 WSL 측정과 시험이 없던 길 포함) → 노드가 패킷 하나를 어떻게 판정하나(코드)"""
+    ZN = "rt_control/zmq_adapter/src/rt_zmq_node.cpp"
+    a = []
+    # ---- 1/2 그림 + 숫자 ----
+    a.append({"kind": "chain", "section": SEC6, "title": "덧붙임 (11/11 저녁) — 같은 RT 루프를 ZeroMQ 로: 명령이 반영되어 돌아오기까지 0.9 ms, 그 절반은 소켓도 스케줄러도 아니라 루프의 주기", "perRow": 4, "nodeH": 1.3,
+              "crumb": "7부 왜·사고·방식 · 덧붙임 ZeroMQ 1/2 그림 (11/11 저녁)",
+              "items": [
+                  {"kind": "in", "text": "공고(Framework S/W)의 필수 역량: 메시징 분산 시스템(ZeroMQ · DDS · ROS 2)\n이 저장소에는 DDS·ROS 2·MQTT 뿐 — ZeroMQ 가 빈칸", "fs": 9},
+                  {"kind": "q", "text": "rt_core 를 고쳐야\n하나?", "answer": "아니오: 껍질만 바꾼다 — 명령 번호 필드 둘(seq · cmd_seq)만 더함"},
+                  {"kind": "do", "text": "Python SDK: TARGET(seq = k) 를 DEALER 로\n노드의 ROUTER → 명령 스레드: 형식 · 관절 수 · NaN 검사 → ACK", "fs": 9},
+                  {"text": "명령 우편함(spsc_ring) → RT 루프가 다음 주기에 꺼냄 (0 ~ 1 ms)\n워치독 · 변화량 제한 → 상태에 cmd_seq = k", "fs": 9},
+                  {"text": "상태 벨트 → 발행 스레드(200 us 마다) → PUB 1 kHz\n같은 PC 의 다른 프로세스는 공유 메모리(seqlock)로", "fs": 9},
+                  {"kind": "q", "text": "cmd_seq ≥ k 인 상태가\n돌아오기까지?", "answer": "WSL p50 0.88 / p99 1.81 ms (1,000회, 잃음 0) · 상태 1만 개 빈 번호 0"},
+                  {"kind": "q", "text": "RT 스레드를\nSCHED_FIFO 로 올리면?", "answer": "p50 0.88 / p99 1.71 — 거의 그대로"},
+                  {"kind": "out", "text": "몫 나누기: 소켓 왕복 0.21 ms · 루프 주기 대기 평균 0.5 ms\n· 발행 깨어남 평균 0.1 ms — 스케줄러가 줄일 몫이 아니다", "fs": 9},
+                  {"kind": "do", "text": "CI 끝-대-끝 12단계(진짜 libzmq · pyzmq): 워치독 51~52 ms 뒤 FAULT\n· 나쁜 패킷 넷 · 클라이언트 둘 · 느린 구독자 · 다시 연결 · 우편함 가득 참", "fs": 9},
+                  {"kind": "fail", "text": "시험이 없던 길(느린 구독자): 12초 안 읽어도 빈 번호 0 — 전부 묵은 채 도착\n45초면 빈 번호 12,109, 그래도 노드의 버림 카운터는 0", "fs": 9},
+                  {"kind": "fail", "text": "한계: WSL 은 가상 머신 — SCHED_FIFO 여도 깨어남 최대 3.56 ms\n(한 주기 넘음 30번). Pi(PREEMPT_RT) 값은 아직 — 예측만 E24 5절", "fs": 9},
+                  {"kind": "end", "text": "결론: 미들웨어 교체 = 어댑터 교체 (11/03 의 설계 문장을 코드로)\n더 줄이려면 구조(공유 메모리 · 같은 프로세스) · 지금 값은 conflate", "fs": 9},
+              ],
+              "bottom": "읽는 법: 노드는 소켓을 기다리는 일반 스레드와, 우편함만 보는 RT 스레드로 나뉜다(ROS 2 노드와 같은 모양). 그래서 명령은 도착해도 다음 주기까지 기다린다 — 지연이 아니라 설계다(RT 스레드가 소켓을 기다리면 주기가 흔들린다, 표①). 숫자는 WSL2(같은 PC, 가상 커널) 1,000회씩 두 번 — 일반 스케줄링 / RT 스레드만 SCHED_FIFO 80 + mlockall. 최댓값(19.7 vs 3.7 ms)은 한 번씩이라 원인을 가르지 않는다. 느린 구독자는 샌드박스(진짜 libzmq 4.3.5). 출처: docs/experiments/E24.md(3·5·7절), docs/measurements/zmq_bench_wsl_20261111.json · zmq_bench_wsl_fifo_20261111.json, rt_control/zmq_adapter/README.md, DECISIONS 11/11",
+              "next": "노드가 패킷 하나를 받으면 — 형식 · 관절 수 · NaN 을 어떻게 판정하고, 거절은 어떻게 알리나? (handle_packet)"})
+    # ---- 2/2 코드 ----
+    a.append({"kind": "code", "section": SEC6, "title": "덧붙임 (11/11 저녁) — 패킷 하나의 판정: 형식 → 관절 수 → NaN → 우편함, 거절은 이유와 함께 (rt_zmq_node.handle_packet)", "file": ref(ZN, 199, 229) + " (handle_packet 의 앞부분)",
+              "crumb": "7부 왜·사고·방식 · 덧붙임 ZeroMQ 2/2 코드 (11/11 저녁)",
+              "code": code(ZN, 199, 229, dedent=2), "codeSize": 10, "pointsSize": 10.5,
+              "points": ["머리부터: magic · version · 길이가 틀리면 본문을 읽지 않고 BAD_PACKET. seq 도 믿을 수 없으므로 acked_seq 0 으로 답한다",
+                         "TARGET: 관절 수가 노드와 다르면 BAD_DOF, NaN·무한대가 있으면 BAD_VALUE — NaN 은 변화량 제한의 비교(delta > max)를 늘 거짓으로 통과해 마지막 안전장치가 뚫린다",
+                         "통과하면 받은 시각을 찍어 명령 우편함(spsc_ring)에 — RT 스레드는 다음 주기에 최신 것 하나만 꺼낸다. 우편함이 차면 RING_FULL: 10 Hz 노드에 200개를 한꺼번에 넣으면 ok 63 · ring_full 137(64칸 링은 한 칸을 비워 둔다)",
+                         "모든 패킷에 답한다: 조용히 버리면 클라이언트는 '느린 것'과 '틀린 것'을 구분하지 못한다. 거절 수는 이유별로 세어 끝날 때 JSON 으로",
+                         "패킷 형식은 rt_core/wire.hpp 머리말의 표 하나(머리 24바이트 + 본문, 리틀엔디언). C++ 와 Python SDK 가 같은 바이트를 기대하는 골든 시험 둘",
+                         "끝-대-끝 시험(CI, 12단계): 쓰레기 바이트 · 관절 수 다름 · NaN · 모르는 type 을 각각 거절하고 그 뒤에도 ping 에 답한다 · 답은 보낸 클라이언트에게만 간다"],
+              "foot": "출처: rt_control/zmq_adapter/src/rt_zmq_node.cpp(436줄), rt_core/include/rt_core/wire.hpp, sdk/python/tests/test_zmq_node.py, DECISIONS 11/11. 한계: 암호화·인증 없음(CURVE 를 켜지 않았다 — LAN·같은 PC 경로), Zenoh·C++ 클라이언트는 아직",
               "next": "끝 — 1~7부와 덧붙임을 한 줄기로 접으면: 결국 로봇은 이렇게 움직인다"})
     return a

@@ -33,7 +33,7 @@ cmake -S rt_control/zmq_adapter -B build/zmq_adapter && cmake --build build/zmq_
 # 다른 창
 PYTHONPATH=sdk/python python3 sdk/python/examples/follow_sine.py  # 사인파 목표 → 실제 위치
 ./build/zmq_adapter/rt_state_peek --count 5                        # 공유 메모리로 최신 상태
-RT_ZMQ_NODE=build/zmq_adapter/rt_zmq_node python3 sdk/python/tests/test_zmq_node.py   # 끝-대-끝 시험 (CI 와 같은 것)
+RT_ZMQ_NODE=build/zmq_adapter/rt_zmq_node python3 sdk/python/tests/test_zmq_node.py   # 끝-대-끝 12단계 (CI 와 같은 것)
 ```
 
 옵션은 `--help`. 기본 포트는 상태 5555, 명령 5556. **기본 bind 는 `tcp://*`(모든 주소)이고 ZeroMQ 는 암호화·인증이 없다**(CURVE 를 켜지 않았다) —
@@ -44,7 +44,10 @@ MQTT 는 함대 관제(1 Hz, 인터넷), ZeroMQ 는 로봇 한 대 안·옆의 �
 
 - **명령은 DEALER ↔ ROUTER**: REQ/REP 는 "보내고 받기"를 번갈아야 해서 답 하나를 잃으면 소켓이 멈춘다. 명령은 100 Hz 로 흘려보내는 것이라
   DEALER 로 연달아 보내고 답(ACK)은 번호로 맞춘다. 노드는 모든 패킷에 답한다 — 거절도 이유(status)와 함께.
-- **상태는 PUB → SUB, 높은 물 표시 1,000**: 느린 구독자가 노드를 막지 않는다. 넘치면 노드가 버리고(`states_send_dropped`) SDK 는 빈 번호로 센다.
+- **상태는 PUB → SUB**: 느린 구독자가 노드를 막지 않는다. 대신 느리게 읽으면 먼저 **늦게** 온다 — 커널 TCP 버퍼와 양쪽 큐(노드 1,000 · SDK 10,000)가
+  다 찬 뒤에야(샌드박스에서 약 30초 분량) PUB 가 그 구독자 몫을 조용히 버린다. 버림은 노드가 모른다(`states_send_dropped` 는 zmq_send 실패만 센다)
+  — SDK 의 빈 번호(`states_missed`)로만 보인다. 최신 값이 필요한 쓰임은 `latest_state()` 또는 `conflate=True`. (처음에는 "1,000개를 넘으면 노드가
+  버리고 센다"고 적었다 — 시험이 없던 길이었고, 11/11 밤에 재 보니 틀렸다. E24 7절)
 - **패킷은 고정 머리 + 길이 + 버전**: 받는 쪽이 본문을 읽기 전에 형식·잘림을 판정. 할당 없이 고정 버퍼. C++ 와 Python 이 같은 바이트를 기대하는 골든 시험 둘.
 - **NaN 은 노드가 거절**(BAD_VALUE): NaN 은 변화량 제한의 비교를 전부 통과한다(NaN 비교는 늘 거짓) — 마지막 안전장치가 뚫리는 값이다.
 - **공유 메모리는 seqlock**: 읽는 프로세스가 몇이든·멈추든 쓰는 쪽은 기다리지 않는다. 데이터 칸을 `std::atomic<uint64_t>` 로 두어 C++ 메모리 모델에서도 정의된 동작.
@@ -53,8 +56,9 @@ MQTT 는 함대 관제(1 Hz, 인터넷), ZeroMQ 는 로봇 한 대 안·옆의 �
 
 ## 숫자 (`docs/experiments/E24.md`)
 
-샌드박스(2코어 VM, 일반 커널, SCHED_FIFO 없음, 같은 PC)에서 500회: ping 왕복 p50 0.33 ms · 명령 → 상태 반영 p50 1.02 / p99 1.76 ms ·
-RT → 클라이언트 한 방향 p50 0.42 ms, 상태 5,170개 중 빠짐 0, 명령 500 중 잃음 0. **WSL·Pi 값은 아직 없다** — 같은 명령으로 재서 E24 에 더한다.
+WSL2(같은 PC, 일반 커널) 1,000회씩 두 번 — 명령 → 상태 반영 **p50 0.88 / p99 1.81 ms**(일반 스케줄링) · **0.88 / 1.71 ms**(RT 스레드만 SCHED_FIFO 80
++ mlockall), 명령 잃음 0, 상태 약 1만 개 중 빠짐 0. 스케줄링을 바꿔도 p50·p99 가 거의 같다 — 지연의 큰 몫은 1 kHz 루프의 주기(평균 0.5 ms)다.
+샌드박스(2코어 VM) 500회는 p50 1.02 / p99 1.76 ms. **Pi(PREEMPT_RT) 값은 아직 없다** — 예측은 E24 5절에 먼저 적어 두었다.
 
 ## 하지 않은 것
 

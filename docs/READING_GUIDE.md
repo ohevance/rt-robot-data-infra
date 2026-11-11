@@ -5,7 +5,7 @@ D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24
 아래 순서로 읽으면 됩니다. 막히는 곳은 "파일명 + 줄 번호"로 물어보면 그 부분만 설명합니다.
 실험이 무엇이었는지는 [`EXPERIMENTS.md`](EXPERIMENTS.md)(한 표), 그 과정의 사고와 해결은 [`LOG.md`](LOG.md)(시간순).
 코드가 **어디서** 도는지(개발 PC·Pi·GitHub CI·작업본, 트리거, 결과 읽는 법)는 [`ENVIRONMENT.md`](ENVIRONMENT.md) 를 먼저 한 번 읽는다.
-처음이라면 코드보다 **장표**([`deck/README.md`](deck/README.md), 145장)로 전체 길을 먼저 본다 — 왕초보 바탕 지식부터 시작해 명령이 로봇의 움직임이 되기까지 10단계를 위에서 아래로 따라가며 단계마다 그림·핵심 코드(파일:줄)·판단이 나오고(시험·검증은 3부에 번호로), 장표마다 왕초보용 설명 문서(`deck/notes/NNN.docx`)가 있다. 아래 29항목 가운데 1~26번은 그 장표의 코드 장표 순서와 같고, 27·28번(11/10~11)은 7부 끝의 덧붙임 장표 137~142 와 짝이다. 29번(11/11 저녁)은 아직 장표가 없다.
+처음이라면 코드보다 **장표**([`deck/README.md`](deck/README.md), 147장)로 전체 길을 먼저 본다 — 왕초보 바탕 지식부터 시작해 명령이 로봇의 움직임이 되기까지 10단계를 위에서 아래로 따라가며 단계마다 그림·핵심 코드(파일:줄)·판단이 나오고(시험·검증은 3부에 번호로), 장표마다 왕초보용 설명 문서(`deck/notes/NNN.docx`)가 있다. 아래 29항목 가운데 1~26번은 그 장표의 코드 장표 순서와 같고, 27·28번(11/10~11)은 7부 끝의 덧붙임 장표 137~142 와 짝이다. 29번(11/11 저녁)은 아직 장표가 없다.
 
 ## 1. 읽는 순서
 
@@ -40,7 +40,7 @@ D4 수집기 내성·장애 주입·CI 2단계(20~23번), D5 MuJoCo 백엔드(24
 | 27 | `fleet/agent/ota_apply.py` · `fleet/ota/rollout.py`(`--manifest`) · `scripts/package_release.sh` · `.github/workflows/release.yml` · `docs/RELEASE.md` | 약 230 / +80 / 100 / 110 | 릴리스 → 배포: 패키지·매니페스트 → 가상 50대 카나리 → 게시 → 장치의 내려받기·sha256·A/B 슬롯·자가 점검·전환, Pi 자율 업데이트 | 왜 A/B 슬롯인가(전원 차단) · 자가 점검이 헬스 게이트보다 먼저 거부하는 이유 · 왜 러너가 실물에 직접 배포하지 않나 · sha256 과 서명의 차이 |
 | 28 | `fleet/common/mqtt_conn.py` · `fleet/agent/pi_agent.py` · `deploy/ec2/setup.sh` · `deploy/ec2/soak_report.sh` · `fleet/tools/mqtt_rtt.py`(+ `nagle_model.py`) · `docs/experiments/E23.md` | 약 85 / 170 / 120 / 115 / 250(+140) | 운영 층을 클라우드에, 실물 장치 1대: 모든 MQTT 클라이언트의 TLS·인증을 환경변수 한 곳에서 · 보드의 진짜 숫자(온도·CPU·메모리)를 보내는 에이전트와 자율 업데이트 · 서버 설치(자체 CA, 비밀번호, compose) · 밤샘 기록을 일련번호로 세기 · MQTT 왕복 시간 | 코드를 바꾸지 않고 개발(1883 평문) ↔ 운영(8883 TLS)을 오가는 자리가 어디인가 · 비밀값이 저장소에 없다는 것을 어떻게 보이나 · 그래프 대신 세어서 보는 이유(유실·재시작·가장 긴 간격) · 왜 `ping` 이 아니라 MQTT 왕복인가 · 보내는 간격이 왕복보다 짧으면 왜 값이 커지나(Nagle) |
 
-| 29 | `rt_control/rt_core/include/rt_core/wire.hpp` · `src/wire.cpp` · `shm_seqlock.hpp` · `rt_control/zmq_adapter/src/rt_zmq_node.cpp` · `rt_state_peek.cpp` · `sdk/python/rtsdk/` (`wire.py` · `client.py` · `bench.py`) · `docs/experiments/E24.md` | 약 105 / 285 / 230 / 435 / 70 · 125 / 215 / 120 | 실시간 계층 ↔ 상위 SW: 같은 `rt_core` 를 ZeroMQ 로 감싼 노드(스레드 셋 · 소켓 둘), 통신 패킷(고정 머리 + 길이 + 버전, 리틀엔디언), 공유 메모리 seqlock(쓰는 쪽은 기다리지 않는다), 답을 번호로 맞추는 SDK | 왜 REQ/REP 가 아니라 DEALER/ROUTER 인가 · NaN 을 왜 노드가 막나(변화량 제한을 통과한다) · seqlock 의 두 번호 읽기가 없으면 무엇이 깨지나(시험이 잡는 것을 변형으로 확인) · 명령 → 반영 1 ms 의 절반이 어디서 오나 · ZeroMQ 와 MQTT 는 각각 어느 층인가 |
+| 29 | `rt_control/rt_core/include/rt_core/wire.hpp` · `src/wire.cpp` · `shm_seqlock.hpp` · `rt_control/zmq_adapter/src/rt_zmq_node.cpp` · `rt_state_peek.cpp` · `sdk/python/rtsdk/` (`wire.py` · `client.py` · `bench.py`) · `sdk/python/tests/test_zmq_node.py` · `docs/experiments/E24.md` | 약 105 / 285 / 230 / 435 / 70 · 125 / 215 / 120 · 210 | 실시간 계층 ↔ 상위 SW: 같은 `rt_core` 를 ZeroMQ 로 감싼 노드(스레드 셋 · 소켓 둘), 통신 패킷(고정 머리 + 길이 + 버전, 리틀엔디언), 공유 메모리 seqlock(쓰는 쪽은 기다리지 않는다), 답을 번호로 맞추는 SDK | 왜 REQ/REP 가 아니라 DEALER/ROUTER 인가 · NaN 을 왜 노드가 막나(변화량 제한을 통과한다) · seqlock 의 두 번호 읽기가 없으면 무엇이 깨지나(시험이 잡는 것을 변형으로 확인) · 명령 → 반영 0.9 ms 의 절반이 어디서 오나(SCHED_FIFO 로 왜 안 줄었나) · 느린 구독자는 왜 버려지기 전에 수십 초 늦게 받고, 노드는 왜 그 버림을 모르나(E24 7절) · ZeroMQ 와 MQTT 는 각각 어느 층인가 |
 
 줄 수는 그 항목을 쓴 날의 값이다(같은 파일에 뒤 항목이 더한 줄은 `(+N)` 으로 적었다). 지금의 줄 수는 `wc -l` 로 본다 — 11/11 기준 `device_agent.py` 335 · `collector.py` 398 · `rollout.py` 422 · `ota_apply.py` 250.
 

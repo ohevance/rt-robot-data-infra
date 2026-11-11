@@ -9,7 +9,13 @@
   6) 나쁜 패킷은 거절, 노드는 산다 : 쓰레기 바이트 → bad_packet, 관절 수 다름 → bad_dof, NaN → bad_value (보내기 전 SDK 가 먼저 막는
                               것과 별개로 노드도 막는지 — 날 바이트로 보낸다), 그 뒤에도 ping 이 온다
   7) 공유 메모리            : 같은 PC 의 rt_state_peek 가 소켓 없이 최신 상태를 읽는다
-  8) 끝날 때 센 값          : SIGTERM 으로 끝내면 status JSON 에 거절 수·워치독·불법 전이 0
+  8) 클라이언트 둘          : 답(ACK)은 보낸 쪽에만 간다 (ROUTER 는 보낸 쪽의 신원으로 돌려보낸다), 상태는 둘 다 받는다
+  9) 느린 구독자            : 1초 안 읽으면 wait_state() 는 1초 묵은 상태를 준다 — 버려지는 것이 아니라 늦게 온다.
+                              latest_state() 는 최신, conflate 클라이언트는 최신 한 장 + 건너뛴 수를 빈 번호로 센다
+                              (11/11 밤에 더함: 이 길은 시험이 없었고, 문서가 "1초 넘으면 노드가 버리고 센다"고 틀리게 말하고 있었다)
+ 10) 끝날 때 센 값          : SIGTERM 으로 끝내면 status JSON 에 거절 수·워치독·불법 전이 0
+ 11) 노드가 다시 뜨면        : 같은 SDK 객체가 다시 붙는다(ZeroMQ 가 다시 연결). 번호가 처음으로 돌아간 것을 빈 번호로 세지 않는다
+ 12) 우편함이 차면          : 10 Hz 노드에 목표 200개를 한꺼번에 → 우편함(64칸)이 차서 ring_full 로 답한다, 그 뒤에도 ping
 
 실행: RT_ZMQ_NODE=<빌드 폴더>/rt_zmq_node python3 sdk/python/tests/test_zmq_node.py
       (rt_state_peek 는 같은 폴더에서 찾는다. pyzmq 가 있어야 한다)
@@ -36,8 +42,8 @@ def free_port():
         return s.getsockname()[1]
 
 
-def start_node(binary, state_port, cmd_port, shm, status_json):
-    cmd = [binary, "--dof", str(DOF), "--loop-hz", "1000", "--publish-hz", "1000", "--prio", "0",
+def start_node(binary, state_port, cmd_port, shm, status_json, hz=1000):
+    cmd = [binary, "--dof", str(DOF), "--loop-hz", str(hz), "--publish-hz", str(hz), "--prio", "0",
            "--state-ep", f"tcp://127.0.0.1:{state_port}", "--cmd-ep", f"tcp://127.0.0.1:{cmd_port}",
            "--shm", shm, "--status-json", status_json]
     return subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True)
@@ -121,21 +127,81 @@ def main():
                 print(f"  7) rt_state_peek: iter {rows[0]['iter']} → {rows[-1]['iter']}, 나이 최대 {max(r['age_ms'] for r in rows):.2f} ms")
             else:
                 print("  7) rt_state_peek 이 없어 건너뜀")
+
+            # 8) 클라이언트 둘 — 답은 보낸 쪽에만, 상태는 둘 다
+            with RobotClient("127.0.0.1", sp, cp, timeout_s=2.0) as other:
+                other.wait_state(2.0)
+                seqs = [robot.send_target([0.2] * DOF, wait_ack=False) for _ in range(30)]
+                for _ in range(10):
+                    other.ping()  # 그사이 other 에 잘못 온 ACK 가 있으면 other 의 답 목록에 쌓인다
+                time.sleep(0.05)
+                robot.ping()
+                got = [robot.ack_status(q) for q in seqs]
+                assert got == ["ok"] * len(seqs), got
+                stray = [q for q in seqs if other.ack_status(q) is not None]
+                assert not stray, f"다른 클라이언트에 답이 갔다: {stray}"
+                s1, s2 = robot.latest_state() or robot.wait_state(), other.latest_state() or other.wait_state()
+                print(f"  8) 클라이언트 둘: 목표 {len(seqs)}개의 답은 보낸 쪽에 {got.count('ok')}/{len(seqs)}, 다른 쪽 {len(stray)} · "
+                      f"상태는 둘 다 (iter {s1.iter}, {s2.iter})")
+
+            # 9) 느린 구독자 — 버려지지 않고 늦게 온다. 최신이 필요하면 latest_state() 또는 conflate
+            with RobotClient("127.0.0.1", sp, cp, timeout_s=2.0, conflate=True) as newest:
+                newest.wait_state(2.0)
+                robot.latest_state()  # 쌓인 것을 비우고 시작
+                skipped0 = newest.states_missed
+                time.sleep(1.0)  # 1초 동안 아무도 읽지 않는다 (1 kHz → 약 1,000장이 쌓인다)
+                old = robot.wait_state()  # 쌓인 것 중 가장 오래된 것
+                age_old = (time.monotonic_ns() - old.rt_stamp_ns) / 1e6
+                new = robot.latest_state()
+                age_new = (time.monotonic_ns() - new.rt_stamp_ns) / 1e6
+                n = newest.latest_state()
+                skipped = newest.states_missed - skipped0
+                assert age_old > 500, age_old  # 1초 전 것이 그대로 남아 있다 — 버려지지 않았다
+                assert age_new < 100, age_new
+                assert n is not None and skipped > 500, (n, skipped)  # conflate: 사이의 것은 빈 번호로 센다 (셈이 0 이 아닌 경우)
+                print(f"  9) 느린 구독자: 1초 안 읽은 뒤 wait_state() 는 {age_old:.0f} ms 묵은 상태, latest_state() 는 {age_new:.1f} ms · "
+                      f"conflate 클라이언트는 최신 한 장 + 건너뛴 {skipped}장을 빈 번호로")
             missed = robot.states_missed
-        # 8) 끝날 때 센 값
-        node.send_signal(signal.SIGTERM)
-        node.wait(timeout=5)
-        st = json.load(open(status_json))
-        assert node.returncode == 0, node.returncode
-        assert st["rejected"]["bad_packet"] >= 1 and st["rejected"]["bad_dof"] >= 1 and st["rejected"]["bad_value"] >= 1, st
-        assert st["illegal_events"] == 0 and st["watchdog_trips"] >= 1 and st["state_drops"] == 0, st
-        print(f"  8) 끝: 패킷 {st['packets']}, 명령 {st['targets_ok']}, 상태 {st['states_sent']} (보내기 실패 {st['states_send_dropped']}), "
-              f"SDK 가 놓친 상태 {missed}, 워치독 {st['watchdog_trips']}, 불법 전이 {st['illegal_events']}")
+
+            # 10) 끝날 때 센 값
+            node.send_signal(signal.SIGTERM)
+            node.wait(timeout=5)
+            st = json.load(open(status_json))
+            assert node.returncode == 0, node.returncode
+            assert st["rejected"]["bad_packet"] >= 1 and st["rejected"]["bad_dof"] >= 1 and st["rejected"]["bad_value"] >= 1, st
+            assert st["illegal_events"] == 0 and st["watchdog_trips"] >= 1 and st["state_drops"] == 0, st
+            print(f" 10) 끝: 패킷 {st['packets']}, 명령 {st['targets_ok']}, 상태 {st['states_sent']} (보내기 실패 {st['states_send_dropped']}), "
+                  f"SDK 가 놓친 상태 {missed}, 워치독 {st['watchdog_trips']}, 불법 전이 {st['illegal_events']}")
+
+            # 11) 노드가 다시 뜨면 — 같은 포트, 같은 SDK 객체. 이번 노드는 10 Hz (12 를 위해)
+            status2 = os.path.join(os.path.dirname(status_json), "status2.json")
+            node = start_node(binary, sp, cp, "", status2, hz=10)
+            s = robot.wait_state(5.0)
+            while s.seq > 1000:  # 앞 노드의 것이 남아 있으면 넘긴다
+                s = robot.wait_state(5.0)
+            assert robot.ping() < 1.0 and robot.info()["loop_hz"] == 10
+            assert robot.states_missed == missed, (missed, robot.states_missed)  # 번호가 처음으로 돌아간 것은 빈 번호가 아니다
+            print(f" 11) 노드를 다시 띄우자 같은 SDK 객체가 다시 붙음: 새 노드의 상태 번호 {s.seq}, 빈 번호 셈 그대로 {robot.states_missed}")
+
+            # 12) 우편함이 차면 — 10 Hz 루프는 100 ms 에 한 번 우편함을 비운다. 그 사이에 200개를 넣으면 넘친다
+            seqs = [robot.send_target([0.1] * DOF, wait_ack=False) for _ in range(200)]
+            time.sleep(0.3)
+            robot.ping()
+            got = [robot.ack_status(q) for q in seqs]
+            full = got.count("ring_full")
+            assert got.count("ok") + full == len(seqs) and full >= 1, {k: got.count(k) for k in set(got)}
+            assert robot.ping() < 1.0
+            node.send_signal(signal.SIGTERM)
+            node.wait(timeout=5)
+            st2 = json.load(open(status2))
+            assert node.returncode == 0 and st2["rejected"]["ring_full"] == full, (node.returncode, st2)
+            print(f" 12) 목표 200개를 한꺼번에: ok {got.count('ok')}, ring_full {full} (64칸 링은 한 칸을 비워 둬서 63개까지) — 노드도 같은 수를 셈, 그 뒤에도 ping")
     finally:
         if node.poll() is None:
             node.kill()
             node.wait()
-    print("OK: rt_zmq_node 끝-대-끝 (info·ping · 추종 · cmd_seq · 워치독 · 복구 · 나쁜 패킷 · 공유 메모리 · 종료)")
+    print("OK: rt_zmq_node 끝-대-끝 12단계 (info·ping · 추종 · cmd_seq · 워치독 · 복구 · 나쁜 패킷 · 공유 메모리 · 클라이언트 둘 · "
+          "느린 구독자 · 종료 · 다시 연결 · 우편함 가득 참)")
 
 
 if __name__ == "__main__":

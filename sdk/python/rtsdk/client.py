@@ -8,8 +8,10 @@
         print(s.robot_state, s.position)
 
 소켓 두 개 (ZeroMQ)
-    SUB    ← 노드의 PUB (state_port, 기본 5555): STATE 를 받기만 한다. 느리게 읽어도 노드는 기다리지 않는다
-           (노드 쪽 높은 물 표시 1,000개를 넘으면 노드가 버린다 → State.seq 의 빈 번호로 보인다)
+    SUB    ← 노드의 PUB (state_port, 기본 5555): STATE 를 받기만 한다. 느리게 읽어도 노드는 기다리지 않는다.
+           느리게 읽으면 먼저 "늦게" 온다: 커널 TCP 버퍼와 양쪽 큐가 다 찰 때까지(샌드박스에서 약 30초 분량, E24) 쌓였다가 차례로 온다.
+           그 뒤에야 노드의 PUB 가 이 구독자 몫을 조용히 버리고, 그것은 State.seq 의 빈 번호(states_missed)로만 보인다 — 노드는 모른다.
+           최신 값이 필요하면 latest_state()(쌓인 것을 다 읽고 마지막 것) 또는 conflate=True(최신 한 장만, 건너뛴 수는 빈 번호로 센다).
     DEALER ↔ 노드의 ROUTER (cmd_port, 기본 5556): TARGET·PING·GET_INFO 를 보내고 ACK·PONG·INFO 를 받는다.
            REQ 가 아니라 DEALER 인 이유: REQ 는 "보내고 받기"를 번갈아야 해서 답 하나를 잃으면 소켓이 멈춘다.
            DEALER 는 명령을 연달아 보내고 답은 번호(seq)로 맞춘다 — 100 Hz 로 목표를 흘려보내는 쓰임에 맞다.
@@ -37,7 +39,7 @@ class CommandRejected(RuntimeError):
 
 class RobotClient:
     def __init__(self, host="127.0.0.1", state_port=5555, cmd_port=5556, timeout_s=1.0, conflate=False, context=None):
-        """conflate=True 면 SUB 가 최신 한 장만 들고 있다 (UI 처럼 "지금 값"만 필요할 때). 기본은 전부 받는다."""
+        """conflate=True 면 SUB 가 최신 한 장만 들고 있다 (UI·상위 제어처럼 "지금 값"만 필요할 때). 기본은 전부 받는다(기록용 — 느리게 읽으면 늦게 온다)."""
         self.timeout_ms = int(timeout_s * 1000)
         self._own_ctx = context is None
         self.ctx = context or zmq.Context()
@@ -54,7 +56,7 @@ class RobotClient:
         self._acks = {}  # 내 seq → status (답을 기다리지 않고 보낸 명령의 답이 여기 모인다)
         self.bad_packets = 0  # 형식이 틀려 버린 패킷 수
         self.last_state_seq = None
-        self.states_missed = 0  # 노드의 STATE 번호에 빈 칸이 생긴 수 (느리게 읽어 노드가 버렸다)
+        self.states_missed = 0  # STATE 번호의 빈 칸 수 — 아주 느려서 노드가 이 구독자 몫을 버렸거나, conflate 가 건너뛴 것
         self.states_received = 0  # 형식이 맞아 받아들인 STATE 수 (latest_state 가 건너뛴 것도 센다)
 
     # ---------------------------------------------------------------- 공통

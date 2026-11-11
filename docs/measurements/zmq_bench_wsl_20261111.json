@@ -1,0 +1,59 @@
+{
+ "tool": "rtsdk.bench",
+ "n": 1000,
+ "rate_hz": 100.0,
+ "same_host": true,
+ "client": {
+  "python": "3.12.3",
+  "machine": "x86_64"
+ },
+ "node": {
+  "node": "rt_zmq_node",
+  "protocol_version": 1,
+  "dof": 6,
+  "loop_hz": 1000,
+  "publish_hz": 1000,
+  "backend": "sim_lag",
+  "watchdog_ms": 50,
+  "max_step_rad": 0.05,
+  "shm": "",
+  "rt": {
+   "sched_fifo": false,
+   "mlockall": false,
+   "kernel_realtime": false,
+   "kernel": "6.18.33.2-microsoft-standard-WSL2"
+  },
+  "zmq": "4.3.5"
+ },
+ "ping_rtt_ms": {
+  "n": 1000,
+  "p50": 0.211,
+  "p95": 0.398,
+  "p99": 0.612,
+  "max": 1.169,
+  "min": 0.097
+ },
+ "cmd_to_state_ms": {
+  "n": 1000,
+  "p50": 0.883,
+  "p95": 1.427,
+  "p99": 1.813,
+  "max": 19.721,
+  "min": 0.171
+ },
+ "cmd_lost": 0,
+ "acks": {
+  "ok": 1000
+ },
+ "states_received": 10327,
+ "states_seconds": 10.382,
+ "states_missed": 0,
+ "rt_to_client_ms": {
+  "n": 1983,
+  "p50": 0.309,
+  "p95": 0.843,
+  "p99": 3.332,
+  "max": 19.259,
+  "min": 0.058
+ }
+}
