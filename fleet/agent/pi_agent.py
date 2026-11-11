@@ -142,8 +142,13 @@ def main():
             return 2
         agent.running = True
         agent.auto_update = {"url": a.auto_update, "poll_s": a.poll_s, "window": parse_window(a.window)}
+        t0 = time.monotonic()
         installed = agent.auto_update_once()
         print(f"auto-update once: installed={installed} fw={agent.fw_version} stage={agent.ota_stage} error={agent.ota_error}")
+        if agent.ota_took_s:
+            # 매니페스트를 읽는 시간은 '전체'에만 들어 있다 (단계별 시간은 내려받기부터)
+            steps = "  ".join(f"{name} {seconds:.3f}" for name, seconds in agent.ota_took_s.items())
+            print(f"  단계별(초): {steps}   내려받은 크기 {agent.ota_bytes} B   전체(매니페스트 읽기 포함) {time.monotonic() - t0:.3f} 초")
         return 0 if agent.state != "fault" else 1
 
     signal.signal(signal.SIGTERM, raise_keyboard_interrupt)

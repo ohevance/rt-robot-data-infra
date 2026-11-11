@@ -1,0 +1,93 @@
+{
+  "version": "0.9.0-rc1",
+  "bad": false,
+  "stages_pct": [
+    5,
+    50,
+    100
+  ],
+  "devices": 50,
+  "updated_devices": 50,
+  "success": true,
+  "rollback_s": null,
+  "apply_s": 2.0,
+  "health_wait_s": 3.0,
+  "timeline": [
+    {
+      "t_s": 0.0,
+      "event": "산출물 [aarch64] http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-rc1-aarch64.tar.gz (sha256 78bc27d38c51…, 21734 bytes)"
+    },
+    {
+      "t_s": 0.0,
+      "event": "산출물 [x86_64] http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-rc1-x86_64.tar.gz (sha256 70851ad2f728…, 21450 bytes)"
+    },
+    {
+      "t_s": 0.0,
+      "event": "대상 장치 50대, 버전 0.9.0-rc1, 단계 [5, 50, 100]%"
+    },
+    {
+      "t_s": 0.0,
+      "event": "단계 5%: 3대에 ota 전송"
+    },
+    {
+      "t_s": 1.2,
+      "event": "단계 5%: 전원 적용 완료 (1.2초)"
+    },
+    {
+      "t_s": 4.2,
+      "event": "단계 5%: 헬스 검사 — 비정상 0/3 (허용 0)"
+    },
+    {
+      "t_s": 4.2,
+      "event": "단계 50%: 22대에 ota 전송"
+    },
+    {
+      "t_s": 6.2,
+      "event": "단계 50%: 전원 적용 완료 (2.0초)"
+    },
+    {
+      "t_s": 9.2,
+      "event": "단계 50%: 헬스 검사 — 비정상 0/25 (허용 0)"
+    },
+    {
+      "t_s": 9.2,
+      "event": "단계 100%: 25대에 ota 전송"
+    },
+    {
+      "t_s": 11.41,
+      "event": "단계 100%: 전원 적용 완료 (2.2초)"
+    },
+    {
+      "t_s": 14.41,
+      "event": "단계 100%: 헬스 검사 — 비정상 0/50 (허용 0)"
+    },
+    {
+      "t_s": 14.41,
+      "event": "완료: 50/50 장치가 0.9.0-rc1"
+    }
+  ],
+  "started_at": "2026-11-10T23:59:01.164251+00:00",
+  "finished_at": "2026-11-10T23:59:15.574437+00:00",
+  "mode": "artifact",
+  "real_devices": [],
+  "total_s": 14.41,
+  "manifest": {
+    "source": "http://127.0.0.1:8089/manifest.json",
+    "url": "http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-rc1-aarch64.tar.gz",
+    "sha256": "78bc27d38c51bcc7db8b458ce6c45f7877e2cb7641ae24314c9195e00a8a01bc",
+    "size": 21734,
+    "commit": "2871cb1b54795db4217c0ae557eb60c381fe9f24",
+    "arch": {
+      "aarch64": {
+        "url": "http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-rc1-aarch64.tar.gz",
+        "sha256": "78bc27d38c51bcc7db8b458ce6c45f7877e2cb7641ae24314c9195e00a8a01bc",
+        "size": 21734
+      },
+      "x86_64": {
+        "url": "http://127.0.0.1:8089/rt-robot-data-infra-0.9.0-rc1-x86_64.tar.gz",
+        "sha256": "70851ad2f728df274dcb39eb6a647fce49cd7522ae1cefe90459389bee890665",
+        "size": 21450
+      }
+    }
+  }
+}

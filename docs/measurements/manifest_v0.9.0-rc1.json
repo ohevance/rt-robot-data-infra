@@ -1,0 +1,30 @@
+{
+  "version": "0.9.0-rc1",
+  "arch": {
+    "aarch64": {
+      "url": "rt-robot-data-infra-0.9.0-rc1-aarch64.tar.gz",
+      "sha256": "78bc27d38c51bcc7db8b458ce6c45f7877e2cb7641ae24314c9195e00a8a01bc",
+      "size": 21734
+    },
+    "x86_64": {
+      "url": "rt-robot-data-infra-0.9.0-rc1-x86_64.tar.gz",
+      "sha256": "70851ad2f728df274dcb39eb6a647fce49cd7522ae1cefe90459389bee890665",
+      "size": 21450
+    }
+  },
+  "url": "rt-robot-data-infra-0.9.0-rc1-aarch64.tar.gz",
+  "sha256": "78bc27d38c51bcc7db8b458ce6c45f7877e2cb7641ae24314c9195e00a8a01bc",
+  "size": 21734,
+  "commit": "2871cb1b54795db4217c0ae557eb60c381fe9f24",
+  "built_at": "2026-11-10T23:58:30Z",
+  "rollout": {
+    "stages_pct": [
+      5,
+      50,
+      100
+    ],
+    "health_wait_s": 5,
+    "max_fail": 0,
+    "apply_timeout_s": 60
+  }
+}

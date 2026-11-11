@@ -1,0 +1,50 @@
+{
+  "label": "selftest",
+  "kernel": "6.8.0-2054-raspi-realtime",
+  "preempt_rt": true,
+  "sched_fifo": false,
+  "sched_errno": 0,
+  "mlockall": true,
+  "mlock_errno": 0,
+  "cpu_pin": -1,
+  "period_us": 1000,
+  "seconds": 0.5,
+  "work_us": 50,
+  "iterations": 500,
+  "samples": 500,
+  "drops": 0,
+  "wake_us": {
+    "min": 73.818,
+    "avg": 123.289,
+    "p50": 121.155,
+    "p99": 158.32,
+    "p999": 336.674,
+    "max": 336.674,
+    "n": 500
+  },
+  "period_err_us": {
+    "min": -195.343,
+    "avg": 0.067,
+    "p50": -0.124,
+    "p99": 47.894,
+    "p999": 211.189,
+    "max": 211.189,
+    "n": 499
+  },
+  "work_us_stats": {
+    "min": 50.129,
+    "avg": 51.67,
+    "p50": 50.332,
+    "p99": 112.203,
+    "p999": 249.645,
+    "max": 249.645,
+    "n": 500
+  },
+  "_where": "실물 Pi 4 가 Release v0.9.0-rc1 의 aarch64 패키지를 GitHub 에서 받아 설치하면서 돌린 자가 점검(selftest.sh)의 결과 파일. Pi 의 ~/rt-slots-test/current/selftest.json 출력에서 전사 (2026-11-11 09:21 KST 설치). 러너(ubuntu-24.04-arm)가 만든 바이너리가 Pi 에서 돈다는 증거이지 RT 성능 측정이 아니다 (--no-rt, 0.5초)",
+  "_slot_state": {
+    "current": "0.9.0-rc1",
+    "previous": null,
+    "switched_at": "2026-11-11T09:21:54",
+    "sha256": "78bc27d38c51bcc7db8b458ce6c45f7877e2cb7641ae24314c9195e00a8a01bc"
+  }
+}

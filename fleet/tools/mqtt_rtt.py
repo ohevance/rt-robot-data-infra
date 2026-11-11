@@ -13,16 +13,23 @@
                TLS·비밀번호·브로커의 라우팅을 실제 장치와 같은 길로 지난다 (ping 은 ICMP 라 브로커를 지나지 않고, 보안 그룹이 막는다).
   transit 과의 관계: (전달 지연 표시값) − (rtt 의 절반) ≈ 두 시계의 차이 (어림)
 
+**보내는 간격은 왕복 시간보다 길게** (11/11 첫 측정에서 배운 것 — docs/experiments/E23.md)
+  처음엔 0.2초 간격으로 쟀다. Pi → 시드니의 왕복이 약 0.285초라 간격이 왕복보다 짧았고, 값이 최소 285 / 중앙 707 / 최대 854 ms 로 나왔다.
+  앞 메시지의 수신 확인(ACK)이 오기 전에 다음 작은 메시지를 쓰면 TCP 의 Nagle 알고리즘이 그것을 붙잡아 둔다 — 클라이언트(paho)도
+  브로커(Mosquitto 기본값)도 그렇다. 그래서 메시지가 왕복을 두세 번 기다린다. 이것은 망의 지연이 아니라 "재는 방법"이 만든 값이다.
+  기본 간격을 1초(실제 텔레메트리와 같은 1 Hz)로 바꿨다. --nodelay 는 이 가설을 확인하려는 옵션이다(클라이언트 소켓에 TCP_NODELAY).
+
 접속 설정은 다른 도구와 같다 — 환경변수 FLEET_BROKER / FLEET_PORT / FLEET_TLS_CA / FLEET_USER / FLEET_PASS (fleet/common/mqtt_conn.py).
 결과 JSON 에는 **서버 주소를 적지 않는다**(저장소에 올라가는 파일이다). 어디서 어디로 쟀는지는 --from-label / --server-label 로 적는다.
 
 사용:
   # [Pi 창] 서비스와 같은 설정으로 (에이전트는 그대로 돈다 — client id 가 달라 서로 건드리지 않는다)
   set -a; . ~/.config/rt-fleet/fleet.env; set +a
-  python3 fleet/tools/mqtt_rtt.py --count 300 --from-label "Pi 4 (집, Wi-Fi)" --out ~/rtt_pi.json
+  python3 fleet/tools/mqtt_rtt.py --from-label "Pi 4 (집, Wi-Fi)" --out ~/rtt_pi.json                       # 1초 간격 × 100 = 100초
+  python3 fleet/tools/mqtt_rtt.py --interval 0.2 --count 300 --nodelay --from-label "…" --out ~/rtt_b.json   # 가설 확인용
   # [WSL 창]
   export FLEET_BROKER=<서버> FLEET_TLS_CA=~/fleet-ca.crt FLEET_USER=fleet;  read -s -p "FLEET_PASS: " FLEET_PASS; export FLEET_PASS
-  python3 fleet/tools/mqtt_rtt.py --count 300 --from-label "WSL2 (노트북, 집)" --out docs/measurements/rtt_wsl_sydney.json
+  python3 fleet/tools/mqtt_rtt.py --from-label "WSL2 (노트북, 집)" --out docs/measurements/rtt_wsl_sydney.json
 
 읽는 순서: percentile → RttProbe(on_connect / on_message / wait_ready / run) → summarize → main
 """
@@ -55,10 +62,11 @@ def percentile(sorted_values, p):
 class RttProbe:
     """보내고 → 자기가 받는다. 번호(seq)로 짝을 맞춘다."""
 
-    def __init__(self, host, port, qos=0):
+    def __init__(self, host, port, qos=0, nodelay=False):
         self.host = host
         self.port = port
         self.qos = qos
+        self.nodelay = nodelay
         self.client_id = f"rtt-{socket.gethostname()}-{os.getpid()}"
         self.topic = f"rtt/{self.client_id}"       # fleet/ 아래가 아니다 — 수집기·배포기가 구독하지 않는 곳
         self.sent_ns = {}                          # seq -> 보낸 시각 (단조 시계)
@@ -71,7 +79,13 @@ class RttProbe:
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=self.client_id, protocol=mqtt.MQTTv311)
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
+        if nodelay:
+            self.client.on_socket_open = self.on_socket_open
         self.security = mqtt_conn.apply_security(self.client)
+
+    def on_socket_open(self, client, userdata, sock):
+        """소켓이 열릴 때마다(재접속 포함) Nagle 을 끈다 — 작은 메시지를 모으지 않고 바로 보낸다. TLS 소켓도 같은 호출을 받는다"""
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     def on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code.is_failure:
@@ -163,12 +177,21 @@ def summarize(values, count):
     return out
 
 
+def to_json_text(result):
+    """결과 dict → JSON 글. 개별 값(samples_ms)은 한 줄에 — 줄마다 하나씩 풀면 300줄이 되어 읽을 수도 붙여 넣을 수도 없다"""
+    head = dict(result)
+    samples = head.pop("samples_ms", [])
+    text = json.dumps(head, ensure_ascii=False, indent=2)
+    return text[:-2] + ',\n  "samples_ms": ' + json.dumps(samples) + "\n}\n"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--broker", default=None, help="기본: 환경변수 FLEET_BROKER 또는 localhost")
     ap.add_argument("--port", type=int, default=None)
-    ap.add_argument("--count", type=int, default=300)
-    ap.add_argument("--interval", type=float, default=0.2, help="보내는 간격(초). 0.2 × 300 = 1분")
+    ap.add_argument("--count", type=int, default=100)
+    ap.add_argument("--interval", type=float, default=1.0, help="보내는 간격(초). 왕복 시간보다 길어야 한다 — 짧으면 Nagle 때문에 값이 커진다 (E23)")
+    ap.add_argument("--nodelay", action="store_true", help="클라이언트 소켓에 TCP_NODELAY (Nagle 끔). 가설 확인용 — 브로커 쪽 Nagle 은 그대로다")
     ap.add_argument("--payload-bytes", type=int, default=200, help="메시지 크기 — 텔레메트리 한 건(약 300바이트)과 비슷하게")
     ap.add_argument("--qos", type=int, default=0, choices=[0, 1])
     ap.add_argument("--from-label", default="", help="어디서 쟀나 (예: 'Pi 4 (집, Wi-Fi)'). 주소는 적지 않는다")
@@ -177,7 +200,7 @@ def main():
     a = ap.parse_args()
 
     host, port = mqtt_conn.broker_defaults(a.broker, a.port)
-    probe = RttProbe(host, port, qos=a.qos)
+    probe = RttProbe(host, port, qos=a.qos, nodelay=a.nodelay)
     try:
         probe.start()
     except (ConnectionError, FileNotFoundError) as e:
@@ -190,7 +213,8 @@ def main():
     probe.run(a.count, a.interval, a.payload_bytes)
     probe.stop()
 
-    stats = summarize(probe.results(a.count), a.count)
+    values = probe.results(a.count)
+    stats = summarize(values, a.count)
     result = {
         "what": "MQTT 왕복 시간: 같은 클라이언트가 PUBLISH 하고 브로커를 거쳐 자기가 다시 받는다 (시계 하나) — fleet/tools/mqtt_rtt.py",
         "from": a.from_label or "(표기 없음 — --from-label 로 적는다. 호스트 이름은 저장소에 남기지 않는다)",
@@ -199,14 +223,17 @@ def main():
         "port": port,
         "qos": a.qos,
         "interval_s": a.interval,
+        "tcp_nodelay_client": a.nodelay,
         "payload_bytes": a.payload_bytes,
         "connect_ms": round(probe.connect_ms, 1) if probe.connect_ms is not None else None,
         "rtt_ms": stats,
         "one_way_estimate_ms": round(stats["p50"] / 2.0, 1) if stats["p50"] is not None else None,
         "note": "편도 어림 = 왕복 p50 의 절반(경로 대칭 가정). 대시보드의 전달 지연(도착 − 장치 측정)과의 차이가 두 시계의 차이다",
         "measured_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "samples_ms": [round(v, 1) for v in values],   # 보낸 순서대로. 분포를 다시 볼 수 있게 (최소·중앙값만으로는 '무엇이 값을 키웠나'를 못 가른다)
     }
-    print(f"rtt {result['from']} -> {a.server_label} [{' '.join(probe.security) or '평문'}]  "
+    print(f"rtt {result['from']} -> {a.server_label} [{' '.join(probe.security) or '평문'}] "
+          f"간격 {a.interval} s{' nodelay' if a.nodelay else ''}  "
           f"connect {result['connect_ms']} ms  "
           f"rtt ms min={stats['min']} p50={stats['p50']} p95={stats['p95']} p99={stats['p99']} max={stats['max']}  "
           f"received {stats['received']}/{stats['sent']}")
@@ -214,8 +241,7 @@ def main():
         out = os.path.expanduser(a.out)
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
         with open(out, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-            f.write("\n")
+            f.write(to_json_text(result))
         print(f"json -> {out}")
     return 0 if stats["received"] > 0 else 1
 

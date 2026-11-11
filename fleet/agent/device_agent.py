@@ -45,6 +45,8 @@ class DeviceAgent:
         self.slot_root = slot_root            # A/B 슬롯 디렉터리. None 이면 ota 는 흉내 경로만 된다
         self.ota_stage = None                 # 마지막 설치가 어디까지 갔나 (텔레메트리에 실린다)
         self.ota_error = None
+        self.ota_took_s = {}                  # 마지막 설치의 단계별 시간(초): download · verify · extract · selftest · switch · post_switch
+        self.ota_bytes = 0                    # 마지막으로 내려받은 크기
         self.auto_update = None               # {"url":..., "poll_s":..., "window":(h0,h1) | None}
         self.auto_thread = None
         if slot_root is not None:
@@ -254,6 +256,8 @@ class DeviceAgent:
         self.ota_stage = "downloading"
         r = ota_apply.install(self.slot_root, version, url, sha256, size)
         self.ota_stage = r.stage
+        self.ota_took_s = dict(r.took_s)
+        self.ota_bytes = r.bytes
         if r.ok:
             self.prev_fw_version = None   # 이전 버전은 슬롯의 state.json 이 기억한다
             self.fw_version = version

@@ -1,0 +1,32 @@
+{
+  "what": "soak: 장치 한 대의 연속 보고 기록을 서버 DB 에서 센 것 (deploy/ec2/soak_report.sh)",
+  "server": "시드니 (AWS ap-southeast-2)",
+  "device_id": "pi-rt",
+  "first_kst": "2026-11-10 18:37:34",
+  "last_kst": "2026-11-11 09:23:38",
+  "hours": 14.77,
+  "expected": 53167,
+  "received": 53167,
+  "lost": 0,
+  "duplicates": 0,
+  "agent_restarts": 0,
+  "restarts": [],
+  "max_gap_device_time_s": 1.0,
+  "max_gap_arrival_s": 1.6,
+  "transit_ms": {
+    "p50": 146.5,
+    "p95": 153.9,
+    "max": 1935.4,
+    "hourly_p50_min": 138.6,
+    "hourly_p50_max": 154.1,
+    "note": "도착 시각 − 장치 측정 시각. 두 시계의 차이가 섞여 있다 — 지연으로 인용하지 않는다"
+  },
+  "events": {
+    "online": 1
+  },
+  "collector": {
+    "max_backlog_rows": 0,
+    "max_db_errors": 0
+  },
+  "measured_at_utc": "2026-11-11T00:23:39Z"
+}

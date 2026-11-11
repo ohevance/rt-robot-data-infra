@@ -8,6 +8,7 @@
   4) Collector.flush_once(dry-run): 메시지 수·온라인 수·지연 통계가 맞게 나온다
   5) 유언(LWT): 에이전트가 갑자기 죽으면 브로커가 offline 을 발행하고 수집기가 그것을 이벤트로 받는다
   6) 보관(retained) 상태는 이벤트가 아니다 · 수집기 단일 인스턴스 잠금
+  9) Nagle 모형(fleet/tools/nagle_model.py): 간격이 왕복보다 길면 왕복 그대로, 짧으면 2~3배, 양쪽 NODELAY 면 다시 왕복 그대로
   8) pi_agent 는 SIGTERM(systemd stop·재부팅) 에 "정상 종료" 길로 끝난다 — offline 을 스스로 남긴다 (별도 프로세스로 확인)
   7) 왕복 시간 도구(fleet/tools/mqtt_rtt.py): 보낸 것이 전부 되돌아오고 번호로 짝이 맞는다, 통계가 맞다, 수집기가 구독하는 토픽을 건드리지 않는다
 
@@ -16,6 +17,7 @@
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -34,6 +36,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "tools"))
 from device_agent import DeviceAgent  # noqa: E402
 from collector import Collector, parse_telemetry, acquire_single_instance_lock  # noqa: E402
 import mqtt_rtt  # noqa: E402
+import nagle_model  # noqa: E402
 
 fail_count = 0
 
@@ -223,6 +226,40 @@ def test_mqtt_rtt_probe():
     values_100 = sorted(float(i) for i in range(1, 101))
     check(mqtt_rtt.percentile(values_100, 95) == 95.0 and mqtt_rtt.percentile(values_100, 99) == 99.0, "백분위수는 가장 가까운 순위")
 
+    text = mqtt_rtt.to_json_text({"from": "시험", "rtt_ms": {"p50": 1.0}, "samples_ms": [1.0, 2.5, 3.0]})
+    back = json.loads(text)
+    check(back["samples_ms"] == [1.0, 2.5, 3.0] and back["from"] == "시험" and text.count("\n") < 10,
+          f"결과 JSON 은 다시 읽히고, 개별 값은 한 줄에 적힌다 (줄 수 {text.count(chr(10))})")
+
+    # --nodelay: 소켓이 열릴 때 TCP_NODELAY 를 건다 (가짜 브로커에는 소켓이 없으므로 콜백을 직접 불러 본다)
+    class FakeSock:
+        def __init__(self):
+            self.options = []
+
+        def setsockopt(self, level, name, value):
+            self.options.append((level, name, value))
+    plain = mqtt_rtt.RttProbe("localhost", 1883)
+    check(getattr(plain.client, "on_socket_open", None) is None, "옵션이 없으면 소켓을 건드리지 않는다")
+    fast = mqtt_rtt.RttProbe("localhost", 1883, nodelay=True)
+    sock = FakeSock()
+    fast.client.on_socket_open(fast.client, None, sock)
+    check(sock.options == [(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)], f"--nodelay 는 TCP_NODELAY 를 건다: {sock.options}")
+
+
+def test_nagle_model():
+    """모형이 하는 말 셋 — 숫자가 아니라 '모양'을 확인한다 (왕복 285 ms 가정)"""
+    one_way = 0.1425
+    slow = nagle_model.simulate(one_way, 1.0, 50)                       # 간격 > 왕복
+    check(all(abs(v - 285.0) < 0.01 for v in slow), f"간격이 왕복보다 길면 전부 왕복 그대로: {min(slow):.0f}~{max(slow):.0f}")
+    fast = nagle_model.simulate(one_way, 0.2, 300)                      # 간격 < 왕복, Nagle 양쪽
+    check(abs(min(fast) - 285.0) < 0.01, f"첫 메시지는 왕복 그대로: {min(fast):.0f}")
+    p50 = nagle_model.quantile(fast, 50)
+    check(2 * 285.0 <= p50 <= 3 * 285.0 and max(fast) <= 3 * 285.0 + 10.0, f"간격이 짧으면 중앙값이 왕복의 2~3배: p50 {p50:.0f}, max {max(fast):.0f}")
+    both = nagle_model.simulate(one_way, 0.2, 300, nagle_client=False, nagle_broker=False)
+    check(all(abs(v - 285.0) < 0.01 for v in both), "양쪽 NODELAY 면 간격이 짧아도 왕복 그대로")
+    half = nagle_model.simulate(one_way, 0.2, 300, nagle_client=False, nagle_broker=True)
+    check(285.0 < nagle_model.quantile(half, 50) < p50, f"클라이언트만 NODELAY 면 그 사이: p50 {nagle_model.quantile(half, 50):.0f}")
+
 
 def test_pi_agent_sigterm():
     """pi_agent 를 별도 프로세스로 띄우고(가짜 브로커) SIGTERM 을 보낸다 — systemd 가 서비스를 멈출 때와 같다.
@@ -254,6 +291,7 @@ if __name__ == "__main__":
     test_lwt_reaches_collector()
     test_retained_status_and_lock()
     test_mqtt_rtt_probe()
+    test_nagle_model()
     test_pi_agent_sigterm()
     if fail_count == 0:
         print("OK: fleet logic")

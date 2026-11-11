@@ -149,7 +149,18 @@ systemctl --user daemon-reload && systemctl --user enable --now rt-pi-agent && s
 
 ## 7. 숫자 (E22)
 
-카나리의 숫자 — 단계별 적용 시간, 전체 시간, 깨진 패키지의 거부·롤백 시간 — 는 `docs/experiments/E22.md` 에 쌓는다. 첫 태그(`v0.9.0-rc1`)의 러너 값은 Release 자산의 `ota_release_good.json`·`ota_release_bad.json` 에서 옮겨 적는다.
+카나리의 숫자 — 단계별 적용 시간, 전체 시간, 깨진 패키지의 거부·롤백 시간 — 는 `docs/experiments/E22.md` 에 쌓는다.
+
+**첫 태그 `v0.9.0-rc1` (2026-11-11, run 42927560505) — 첫 실행에 게시까지 통과.**
+
+| 무엇 | 값 |
+|---|---|
+| 태그 push → Release 게시 | **1분 52초** (패키지 x86_64 21 s · aarch64 43 s → 카나리 48 s → 게시 11 s) |
+| 정상 패키지, 가상 50대 | 50/50, 단계별 적용 완료 **1.2 → 2.0 → 2.2 s**, 전체 14.41 s (헬스 대기 3 s × 3 포함) |
+| 깨진 패키지 | **3/50** 에서 자가 점검이 거부(0.6 s) → 롤백 **1.0 s** |
+| 산출물 | aarch64 21,734 B · x86_64 21,450 B, 사전 릴리스(태그에 `-`) — 실물의 자율 업데이트(`latest`)에는 잡히지 않는다 |
+
+적용·롤백 시간에는 "장치의 다음 보고(1 Hz)까지 최대 1초"가 들어 있다(E22 4절). 원본은 Release 자산을 그대로 옮긴 `docs/measurements/ota_release_v0.9.0-rc1_{good,bad}.json` · `manifest_v0.9.0-rc1.json`.
 
 ## 8. 파일
 

@@ -59,7 +59,8 @@ def main():
     st = stage_times(good)
     st_text = " → ".join(f"{pct}% {t:.1f} s" for pct, t in st) if st else "-"
     lines.append(f"- 정상 패키지: 장치 {good.get('devices')}대, 결과 **{'성공' if good.get('success') else '실패'}** "
-                 f"({good.get('updated_devices')}/{good.get('devices')} 갱신), 단계별 적용 완료 {st_text}, 전체 {good.get('total_s', '?')} s")
+                 f"({good.get('updated_devices')}/{good.get('devices')} 갱신), 단계별 적용 완료 {st_text}, 전체 {good.get('total_s', '?')} s "
+                 f"(카나리의 헬스 대기 {good.get('health_wait_s', '?')} s × {len(st) or '?'}단계 포함 — 위의 배포 정책 값과 다를 수 있다)")
     first_pct = (bad.get("stages_pct") or [5])[0]
     lines.append(f"- 깨진 패키지(자가 점검 실패): 결과 **{'롤백' if not bad.get('success') else '통과(이상!)'}**, "
                  f"닿은 장치 {bad.get('updated_devices')}/{bad.get('devices')} (첫 단계 {first_pct} %), 롤백 {bad.get('rollback_s', '?')} s")

@@ -1,0 +1,29 @@
+{
+  "what": "MQTT 왕복 시간: 같은 클라이언트가 PUBLISH 하고 브로커를 거쳐 자기가 다시 받는다 (시계 하나) — fleet/tools/mqtt_rtt.py",
+  "from": "Pi 4 (집, Wi-Fi)",
+  "server": "시드니 (AWS ap-southeast-2)",
+  "security": [
+    "tls",
+    "auth"
+  ],
+  "port": 8883,
+  "qos": 0,
+  "interval_s": 0.2,
+  "payload_bytes": 200,
+  "connect_ms": 1484.0,
+  "rtt_ms": {
+    "sent": 300,
+    "received": 300,
+    "lost": 0,
+    "min": 285.12,
+    "p50": 707.41,
+    "p95": 838.26,
+    "p99": 851.94,
+    "max": 853.66,
+    "mean": 708.1
+  },
+  "one_way_estimate_ms": 353.7,
+  "note": "편도 어림 = 왕복 p50 의 절반(경로 대칭 가정). 대시보드의 전달 지연(도착 − 장치 측정)과의 차이가 두 시계의 차이다",
+  "measured_at_utc": "2026-11-11T00:23:06Z",
+  "reading_note_added_later": "이 파일은 도구의 첫 판(간격 0.2초, 개별 값 저장 없음)이 낸 그대로다. 간격이 왕복(약 0.285초)보다 짧아 Nagle 로 값이 커졌다고 본다 — one_way_estimate_ms 353.7 은 편도가 아니다. 해석과 검증은 docs/experiments/E23.md"
+}
